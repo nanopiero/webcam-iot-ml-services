@@ -1,0 +1,150 @@
+Detailed development plan
+
+References:
+- ~/doc/ML_services_architecture/plan
+- ~/doc/ML_services_architecture/architecture
+- ../architecture/corrections.txt
+- ../architecture/final_choices.txt
+
+Section 1 — Acquisition, storage, queueing, orchestration, and initial observability
+
+Objective
+Run the acquisition path on EWC: receive notifications, maintain stream
+metadata, archive images and sidecars, prepare NFS processing inputs, and
+publish Kafka jobs. No inference consumer runs during this phase. The resulting
+backlog is intentional and will be consumed in Phase 2 catch-up mode.
+
+Workload baseline
+The fleet contains approximately 25,000 webcams, but produces approximately
+10,000 new images per five minutes, not 25,000 images every five minutes.
+The nominal mean arrival rate is therefore about 33 new images per second.
+Retain the architecture's burst scenario of 10,000 arrivals over one minute
+(about 167 images/second), and assess 200 images/second as its margin target.
+Measure processing jobs separately from source images: panorama splitting
+increases job counts, while status and solar-phase rules reduce eligibility.
+Derive storage projections from measured image sizes, arrival rates, sidecars,
+and eligibility; fleet size alone does not determine retained volume.
+
+WP1.1 — Configuration, contracts, and initial database
+Dependencies: none.
+Tasks:
+- Define deployment configuration for MQTT, spool/archive S3, NFS, PostgreSQL,
+  Kafka, stream-generation rules, worker concurrency, and operation timeouts.
+- Capture representative upstream notifications and document the fields used
+  for image identity, timestamps, image signatures, metadata, and retrieval.
+- Create the initial derived_stream and processing_stream schema on weow-db,
+  including identifiers, profile metadata, flags, slice intervals, and stored
+  partition assignments required by Acquisition.
+- Specify dictionary initialization and synchronized metadata updates, with
+  deterministic stream/profile resolution and stable partition allocation.
+Deliverables: configuration template, schema/migrations, notification fixtures,
+and acquisition data-contract notes.
+Completion: existing and newly discovered streams can be resolved consistently,
+including concurrent discovery, metadata changes, and recurring profiles.
+
+WP1.2 — Archive, NFS, and Kafka foundations
+Dependencies: WP1.1 contracts and configuration.
+Tasks:
+- Configure durable image/sidecar storage and spool access.
+- Deploy the shared NFS on weow-a with the planned processing-image and initial
+  state layout; verify visibility from a client representing a processing VM.
+- Deploy the pilot Kafka broker on weow-a and operational topic with 50
+  partitions, explicit retention configuration, and persistent broker storage.
+- Verify successful archive and complete NFS publication before job emission.
+- Estimate available NFS and Kafka capacity against the planned acquisition-only
+  duration; configure capacity alerts and a stop condition before exhaustion.
+Deliverables: reproducible service configuration and storage-access checks.
+Completion: complete archived images, sidecars, NFS inputs, and acknowledged
+Kafka messages can be read back; configured capacity supports the initial run.
+
+WP1.3 — Acquisition implementation
+Dependencies: WP1.1; WP1.2 for integration validation.
+Tasks:
+- Implement notification handling, metadata dictionaries, stream creation,
+  solar-phase evaluation, status filtering, and deterministic panorama slicing.
+- Retrieve each eligible archive image once; persist its image and metadata
+  sidecar, including resolved processing streams and acquisition timestamp.
+- Prepare processing images and initial stream state on NFS, then publish
+  one job per eligible processing stream to its assigned Kafka partition.
+- Implement bounded worker concurrency and the configured short retry policy.
+- Preserve the accepted crash behavior: in-flight work may be lost or resent.
+  Do not add durable acquisition recovery or reconciliation. Do not discard
+  notifications solely because MQTT msg.dup=1.
+Deliverables: runnable Acquisition service and meaningful contract/integration
+checks for filtering, slicing, metadata transitions, and publication sequencing.
+Completion: representative daytime, transition, nighttime, panoramic, blacklisted,
+and greylisted inputs produce the expected archives, streams, and jobs.
+
+WP1.4 — Orchestration and initial observability
+Dependencies: WP1.2; WP1.3 service interfaces.
+Tasks:
+- Deploy Prometheus and initial dashboards for service and infrastructure data.
+- Expose notification rates, filtering outcomes, stage durations/failures,
+  archived image counts/bytes, job publication rates, and metadata update failures.
+- Monitor worker queue depth/age, memory, CPU, network, NFS occupancy, database
+  performance, and Kafka log growth. Distinguish intentional Kafka accumulation
+  without consumers from an acquisition bottleneck.
+- Define the Kestra Acquisition workflow for launch, supervision, failure
+  relaunch, and daily container restart with dictionary reconstruction.
+Deliverables: workflow configuration, dashboards, and capacity/failure alerts.
+Completion: a controlled stop/restart is visible and service resumes; observed
+crash losses or resends are reported without claiming acquisition recovery.
+
+WP1.5 — Benchmark preparation and acquisition performance validation
+Dependencies: prepare alongside WP1.1; execute after WP1.2–WP1.4 integration.
+Tasks:
+- Build a repeatable workload driver using representative notification/image
+  fixtures and a test spool. Include actual size/aspect-ratio distributions,
+  panoramic inputs, stream-rate variation, and operational eligibility ratios.
+- Include both steady metadata and a discovery/metadata-change burst, so the
+  database and dictionary update paths are exercised at realistic load.
+- Use isolated benchmark object prefixes, stream identities, and Kafka topic
+  with production-equivalent settings to keep synthetic jobs out of live history.
+- Exercise nominal load (10,000 new images/five minutes), the one-minute burst,
+  and the 200-image/second margin target. Record input images and resulting jobs
+  separately. Specify test duration and warm-up in each reproducible run recipe.
+- Measure notification receipt to Kafka acknowledgement and each stage's
+  p50/p95/p99 latency; retain upstream download/publication timestamps to expose
+  delays before Acquisition. Measure throughput, errors, queue depth/age, and
+  burst drain time as well as CPU, memory, network, and storage usage.
+- Repeat representative runs at different times of day to characterize EWC
+  variability. Compare S3 and NFS operation rates and latency, not just MB/s.
+- Project archive, sidecar, NFS, and Kafka growth from measurements, including
+  the acquisition-only backlog and planned retention. Document headroom.
+- Produce a benchmark report with workload, deployment/code versions, service
+  settings, results, bottlenecks, and configuration changes needed before launch.
+Acceptance:
+- Nominal load is sustained without growing acquisition queues or unexplained
+  losses in failure-free runs; burst queues drain after arrivals return to normal.
+- Check whether Acquisition can sustain the 200-image/second margin target;
+  record any shortfall and resolve or explicitly revise sizing before scaling up.
+- Allocate and record an acquisition latency budget within the overall five-minute
+  service target. Meeting an acquisition budget alone does not establish the
+  complete service's end-to-end latency or inference capacity.
+- No storage exhaustion occurs within the planned acquisition-only interval.
+Deliverables: workload fixtures/driver, run recipes, metrics, and benchmark report.
+
+WP1.6 — Controlled launch and Phase 2 handover
+Dependencies: WP1.1–WP1.5 complete.
+Tasks:
+- Launch Acquisition at a controlled scope, then increase to the pilot workload
+  using measured throughput and capacity headroom.
+- Validate archived image/sidecar correspondence, NFS processing inputs, job
+  metadata, partition distribution, and stream database updates.
+- Record acquisition start time, topic/partition configuration, backlog volume
+  and age, resource usage, and available capacity for Phase 2 catch-up.
+- Keep required NFS inputs and initial states available for catch-up; do not
+  introduce age-only deletion while consumers/checkpoints do not yet exist.
+Deliverables: Phase 1 validation record and operational handover notes.
+Completion: Acquisition runs at the agreed workload with observable, bounded
+resource growth and a documented backlog ready for processing.
+
+Benchmark follow-through in later sections
+- Phase 2: benchmark full processing with Triton, state persistence, database
+  writes, catch-up, and one-consumer operation; validate complete service latency
+  once publication is connected.
+- Phase 3: include E-SOH transmission and observation availability in the
+  end-to-end latency assessment.
+- Phase 4: benchmark scene-history rebuilding, backfill, C+Q, and maintenance
+  duration against the available execution window and operational handover.
+These later work packages will be detailed with their respective sections.

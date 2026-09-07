@@ -1,0 +1,74 @@
+Correction: guard replacement of NFS state files after partition reassignment
+
+Applies to: Job Consumption / Processing threads / NFS state persistence.
+
+State files retain the naming convention:
+    {processing_stream_id}_state_{Kafka_offset}.npz
+
+Before publishing a state file at its final path:
+1. Attempt atomic create-if-absent publication. Do not implement this as a
+   separate existence check followed by an ordinary write.
+2. If the destination already exists, check that the consumer still owns the
+   corresponding Kafka partition for the assignment that launched this job.
+3. If ownership is confirmed, replace the existing file with the completed
+   state file. Otherwise, discard this job's pending state write.
+
+Prepare the complete state in a unique temporary file before publication, so
+readers never observe a partially written state file. Replacement must also
+publish the complete file atomically. The chosen filesystem operations must
+provide these semantics on the deployed NFS configuration.
+
+This permits a new owner to replace an earlier attempt's state while preventing
+an old owner that has detected its ownership loss from overwriting the new
+owner's state. Recovery continues to select state versions strictly below the
+committed Kafka position; this correction does not change that rule.
+
+Accepted pilot limitation:
+The ownership check and replacement are not atomic with Kafka reassignment.
+Delayed detection of ownership loss, or another reassignment between the check
+and replacement, can still permit a stale write. Given the expected short NFS
+publication duration, this guard is accepted as a practical pilot improvement,
+not a strict fencing guarantee. The rarity of the remaining race is an
+assumption, not a measured guarantee.
+
+
+Correction: backfill revises scene history while preserving produced values
+
+Reference: ~/doc/ML_services_architecture/architecture:2376
+Applies also to the descriptions of backfill persistence, recovery, C+Q, and
+maintenance wherever backfill is said never to modify existing output rows
+or operational scene state.
+
+Backfill can discover a scene that was absent from the operational history
+because its images were skipped. It must therefore rebuild scene assignments
+chronologically for the affected processing stream, starting from a coherent
+state before the earliest recovered image and continuing through all subsequent
+images up to the operational handover boundary, not only the missing jobs.
+
+For existing valid output rows, backfill may update the scene index. Existing
+raw and post-processed values remain unchanged, preserving observations as
+originally produced and, where applicable, disseminated. Missing or explicitly
+recoverable outputs are filled through backfill as before.
+
+The stored scene index consequently represents the revised scene history; it
+does not necessarily identify the scene under which an existing post-processed
+value was originally computed. Retain original calibration provenance for
+traceability without changing that value. The expectation that recalculation
+would produce only small differences is an evaluation assumption, not a
+requirement for this preservation policy to be coherent.
+
+Subsequent C+Q uses the revised scene assignments and applicable raw outputs.
+The scene-history correction does not trigger recalculation of existing
+post-processed values. Any C+Q method that uses such values must account for
+their original production context rather than assume they were recalculated
+under the revised scene assignment.
+
+Operational processing resumes from the rebuilt final scene state, so future
+scene assignments continue the revised history. Backfill does not enqueue
+corrections for publication or advance latest-output pointers. Existing latest
+output references may expose the revised scene index of their referenced row,
+while the observation values remain unchanged.
+
+This supersedes the blanket rule that backfill cannot modify valid operational
+output rows or operational scene state. Preservation now applies to existing
+valid inference and post-processed values, not to scene assignments.

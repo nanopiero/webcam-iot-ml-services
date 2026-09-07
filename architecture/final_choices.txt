@@ -1,0 +1,35 @@
+Choice: checkpoint recovery and backfill have separate responsibilities
+
+Reference: ~/doc/ML_services_architecture/architecture:2376
+Section: Backfill and replay scheduling.
+
+S3 checkpoint recovery and backfill have separate responsibilities. Restarting
+from a valid S3 checkpoint restores a coherent operational state, even when
+some earlier images were skipped. A coherent state need not incorporate every
+available image. Checkpoint recovery is not responsible for filling these
+gaps; backfill occurs afterwards.
+
+The earlier choice to exclude backfill scene assignments from operational
+history is superseded by "Correction: backfill revises scene history while
+preserving produced values" in corrections.txt.
+
+Backfill rebuilds the affected stream's scene history chronologically, fills
+missing outputs, and updates existing scene indices while preserving existing
+valid raw and post-processed values. Subsequent C+Q uses the revised scene
+history, and live processing resumes from the rebuilt final scene state.
+Backfill does not republish existing observations or advance latest-output
+pointers. See corrections.txt for the complete persistence and provenance rules.
+
+
+Choice: no additional acquisition recovery mechanism for the pilot
+
+Reference: ~/doc/ML_services_architecture/architecture:1869
+Section: Idempotency, ordering anomalies and retries.
+
+An acquisition crash may lose in-flight work or lead to notifications or jobs
+being resent. This behavior is accepted for the pilot; no additional durable
+acquisition recovery or reconciliation mechanism is required.
+
+Remove the suggestion to skip MQTT notifications solely because msg.dup=1.
+The MQTT DUP flag does not establish that the application has already handled
+the notification, so it must not be used alone as a reason to discard it.
