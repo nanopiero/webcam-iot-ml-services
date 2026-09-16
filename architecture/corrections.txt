@@ -1,35 +1,10 @@
-Correction: guard replacement of NFS state files after partition reassignment
+Correction: 
+Static membership will prevent most reassignment races. Each consumer keeps a stable `group.instance.id`, and a sufficiently large session timeout allows it to restart and rejoin without its partitions being immediately reassigned. A rebalance can still occur after that timeout, and late work from the previous owner may then publish stale state.
 
-Applies to: Job Consumption / Processing threads / NFS state persistence.
+The main concern is NFS state corruption rather than occasional stale state. State files should therefore be written to a unique temporary file, completed and flushed, then published to the final path using an atomic rename. This prevents readers from observing partially written `.npz` files, even if a process stops abruptly.
 
-State files retain the naming convention:
-    {processing_stream_id}_state_{Kafka_offset}.npz
+A late consumer may also overwrite `latest_*_outputs` with an older result. This could be prevented with a conditional upsert that updates the row only when the incoming timestamp is newer. Given the expected rarity and limited impact of this case, this additional protection is not considered necessary for the pilot.
 
-Before publishing a state file at its final path:
-1. Attempt atomic create-if-absent publication. Do not implement this as a
-   separate existence check followed by an ordinary write.
-2. If the destination already exists, check that the consumer still owns the
-   corresponding Kafka partition for the assignment that launched this job.
-3. If ownership is confirmed, replace the existing file with the completed
-   state file. Otherwise, discard this job's pending state write.
-
-Prepare the complete state in a unique temporary file before publication, so
-readers never observe a partially written state file. Replacement must also
-publish the complete file atomically. The chosen filesystem operations must
-provide these semantics on the deployed NFS configuration.
-
-This permits a new owner to replace an earlier attempt's state while preventing
-an old owner that has detected its ownership loss from overwriting the new
-owner's state. Recovery continues to select state versions strictly below the
-committed Kafka position; this correction does not change that rule.
-
-Accepted pilot limitation:
-The ownership check and replacement are not atomic with Kafka reassignment.
-Delayed detection of ownership loss, or another reassignment between the check
-and replacement, can still permit a stale write. Given the expected short NFS
-publication duration, this guard is accepted as a practical pilot improvement,
-not a strict fencing guarantee. The rarity of the remaining race is an
-assumption, not a measured guarantee.
 
 
 Correction: backfill revises scene history while preserving produced values
