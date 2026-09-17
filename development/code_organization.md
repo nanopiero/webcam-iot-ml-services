@@ -19,6 +19,7 @@ weow_ml/
     archive.py            bounded spool download and S3 archival operations
     handler.py            ordered single-notification workflow
     workers.py            bounded concurrency and short retry policy
+    service.py            runnable MQTT composition and acknowledgements
     capture.py            independent MQTT contract diagnostic
     cli.py                offline notification-inspection command
 
@@ -38,15 +39,14 @@ The top-level `weow_ml.archive`, `weow_ml.capture`, `weow_ml.config`,
 points. Existing development commands and imports can continue to use them;
 new implementation code imports the service package directly.
 
-Modules are created when they acquire behavior. The live Acquisition path will
-add the following modules as WP1.1--WP1.3 proceeds:
+The live Acquisition path uses the following focused modules:
 
 - `policies.py` contains status, solar-phase and processing-eligibility decisions;
 - `postgres.py` if SQL persistence grows beyond the registry implementation;
 - `nfs.py` for atomic processing-image and initial-state publication;
 - `images.py` for deterministic V0 slicing and JPEG construction;
 - `kafka.py` for job construction and acknowledged publication;
-- `service.py` for the bounded worker pool around `handler.py`;
+- `service.py` for MQTT acknowledgement and runtime composition;
 - `metrics.py` when application metrics are introduced in WP1.4.
 
 ## Dependency direction
@@ -93,6 +93,7 @@ Diagnostic commands remain separate from the operational service:
 python3 -m weow_ml tests/fixtures/notification_n0v0.json
 python3 -m weow_ml.capture --count 10 --timeout 120
 python3 -m weow_ml.archive [options] notification.json
+python3 -m weow_ml.acquisition.service --check
 ```
 
 Unit tests use in-memory fakes and fixtures. Integration tests must use explicit

@@ -1,0 +1,18 @@
+[Unit]
+Description=WEOW Acquisition service
+After=network-online.target weow-kafka.service
+Wants=network-online.target weow-kafka.service
+RequiresMountsFor=/srv/weow-nfs
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name weow-acquisition --replace --rm --network host --memory 2g --pids-limit 512 --group-add keep-groups --security-opt label=disable --volume /srv/weow-nfs:/srv/weow-nfs:rw --volume %h/src/webcam-iot-ml-services/.secrets:/app/.secrets:ro --volume /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro localhost/weow-acquisition:dev
+ExecStop=/usr/bin/podman stop --time 30 weow-acquisition
+ExecStopPost=-/usr/bin/podman rm --force weow-acquisition
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

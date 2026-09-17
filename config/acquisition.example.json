@@ -37,6 +37,7 @@
     "retry_delay_seconds": 0.25,
     "generation_version": 0,
     "maximum_processing_latitude": 68.56,
+    "free_water_tags": ["beach", "coast", "lake", "river", "port"],
     "solar": {
       "transition_margin_seconds": 3600,
       "default_timestamp_field": "download_timestamp",

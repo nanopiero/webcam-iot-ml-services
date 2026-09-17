@@ -89,12 +89,21 @@ check occurs in registry resolution before solar calculation, so such streams
 retain metadata changes without downloading or processing images for dates on
 which Astral cannot supply same-day sunrise and sunset values.
 
-The concrete initial-state NPZ writer remains deliberately separate from this
-handler. The architecture specifies an empty latent bank and null freshness
-signature and ingestion timestamp, but does not yet define the NPZ keys,
-dtypes, or latent dimension. Those fields must match the Phase 2 consumer
-contract; the handler already enforces that its idempotent state publisher
-completes before any corresponding Kafka job is emitted.
+The concrete initial-state NPZ writer remains separate from the handler. Schema
+`S0V0` uses the 2048-element ReID latent dimension from the existing WEOW model,
+an empty float32 latent bank, empty cluster counts, and zero-length arrays for
+the null freshness signature and last ingestion timestamp. Each processing
+stream has one stable immutable state path under its derived-stream hierarchy.
+The handler enforces that state publication completes before the corresponding
+Kafka job is emitted.
+
+The runnable entry point is `python -m weow_ml.acquisition.service`. Its
+`--check` mode validates PostgreSQL, spool and archive S3 access, the writable
+NFS mount, operational Kafka topic metadata, and MQTT TCP reachability without
+subscribing or writing application data. `Containerfile.acquisition` packages
+the entry point on Python 3.12. `deployment/bootstrap_acquisition.sh` builds the
+image and installs a stopped user service; starting the live subscription is a
+separate controlled-launch action.
 
 ## Live MQTT validation, 2026-09-17
 

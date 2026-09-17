@@ -1,0 +1,10 @@
+.git
+.secrets
+.venv
+__pycache__
+*.pyc
+local-captures
+tests
+development
+architecture
+deployment

@@ -26,15 +26,25 @@ def initial_state_bytes():
     return output.getvalue()
 
 
+def initial_state_path(processing_stream_id, processing_image_path):
+    identifier(processing_stream_id, "processing_stream_id")
+    if "_P" not in processing_stream_id:
+        raise ValueError("processing stream ID has no profile suffix")
+    derived_stream_id = processing_stream_id.rsplit("_P", 1)[0]
+    image = PurePosixPath(processing_image_path)
+    if len(image.parts) < 3 or image.parts[:2] != ("images", derived_stream_id):
+        raise ValueError("processing image and stream hierarchy disagree")
+    return PurePosixPath("images", derived_stream_id, "state",
+                         f"{processing_stream_id}_state_initial.npz")
+
+
 class InitialStatePublisher:
     def __init__(self, nfs_root):
         self.nfs_root = nfs_root
         self.content = initial_state_bytes()
 
     def ensure(self, processing_stream_id, processing_image_path):
-        identifier(processing_stream_id, "processing_stream_id")
-        parent = PurePosixPath(processing_image_path).parent
-        relative = parent / f"{processing_stream_id}_state_initial.npz"
+        relative = initial_state_path(processing_stream_id, processing_image_path)
         path, created = publish_bytes_once(self.nfs_root, str(relative), self.content)
         if not created:
             with np.load(path, allow_pickle=False) as state:

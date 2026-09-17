@@ -14,7 +14,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from .contracts import parse_notification
 
 
-def s3_client(endpoint, access_file, secret_file):
+def s3_client(endpoint, access_file, secret_file, ca_bundle=None):
     if not endpoint.startswith("https://"):
         raise ValueError("S3 endpoint must use HTTPS")
     access = Path(access_file).read_text().strip()
@@ -24,6 +24,7 @@ def s3_client(endpoint, access_file, secret_file):
     return boto3.client(
         "s3", endpoint_url=endpoint, aws_access_key_id=access,
         aws_secret_access_key=secret, region_name="us-east-1",
+        verify=ca_bundle or True,
         config=Config(signature_version="s3v4", connect_timeout=10, read_timeout=30,
                       retries={"max_attempts": 1, "mode": "standard"},
                       s3={"addressing_style": "path"},

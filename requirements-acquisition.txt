@@ -1,0 +1,7 @@
+-r requirements-db.txt
+-r requirements-s3.txt
+-r requirements-kafka.txt
+-r requirements-mqtt.txt
+-r requirements-image.txt
+-r requirements-solar.txt
+-r requirements-state.txt

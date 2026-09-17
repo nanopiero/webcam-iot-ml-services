@@ -49,8 +49,10 @@ while the VM retained about 6.3 GiB available RAM. The VM still has no swap.
 - Initial state uses schema `S0V0`: an empty `(0, 2048)` float32 latent bank,
   empty cluster counts, and empty arrays representing null freshness signature
   and last ingestion timestamp. Publication is immutable and atomic.
-- The runnable MQTT service composition has not been started. It is the next
-  development task now that the VM and Kafka storage upgrades are complete.
+- The runnable MQTT composition is built as a Python 3.12 container. Its
+  non-consuming preflight passes for PostgreSQL, both S3 buckets, NFS, Kafka,
+  and MQTT TCP. The installed service remains inactive and disabled until the
+  controlled launch.
 
 ## Resume checks
 

@@ -1,0 +1,14 @@
+FROM docker.io/library/python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+COPY requirements-*.txt ./
+RUN python -m pip install --no-cache-dir -r requirements-acquisition.txt
+
+COPY weow_ml ./weow_ml
+COPY config/acquisition.example.json ./config/acquisition.example.json
+
+ENTRYPOINT ["python", "-m", "weow_ml.acquisition.service"]

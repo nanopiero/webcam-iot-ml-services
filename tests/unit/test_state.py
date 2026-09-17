@@ -10,10 +10,18 @@ from weow_ml.acquisition.state import (
     LATENT_DIMENSION,
     STATE_SCHEMA,
     initial_state_bytes,
+    initial_state_path,
 )
 
 
 class InitialStateTests(unittest.TestCase):
+    def test_path_is_stable_across_image_hours(self):
+        stream = "test_P0S0V0"
+        first = initial_state_path(stream, "images/test/2026/04/15/10/a_P0S0V0.jpg")
+        later = initial_state_path(stream, "images/test/2026/04/16/11/b_P0S0V0.jpg")
+        self.assertEqual(first, later)
+        self.assertEqual(str(first), "images/test/state/test_P0S0V0_state_initial.npz")
+
     def test_contract_is_pickle_free_and_empty(self):
         with np.load(BytesIO(initial_state_bytes()), allow_pickle=False) as state:
             self.assertEqual(str(state["schema_version"]), STATE_SCHEMA)

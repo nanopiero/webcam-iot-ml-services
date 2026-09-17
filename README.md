@@ -38,8 +38,10 @@ The acquisition implementation now provides validated notification contracts,
 a PostgreSQL stream registry, solar and status policies, verified S3 archival,
 atomic NFS image publication, acknowledged Kafka jobs, and bounded worker
 concurrency. A versioned initial-state NPZ contract is also defined. The
-runnable MQTT service composition remains in progress. The Acquisition VM now
-has 7.5 GiB usable RAM, and Kafka uses its dedicated filesystem.
+runnable MQTT composition is packaged in a Python 3.12 container and passes a
+non-consuming infrastructure preflight. Its installed service remains disabled
+pending the controlled-launch work. The Acquisition VM has 7.5 GiB usable RAM,
+and Kafka uses its dedicated filesystem.
 See [the acquisition development notes](development/acquisition_contract.md)
 for usage, tests, infrastructure observations, and remaining integration work.
 The service boundaries and dependency rules are recorded in
