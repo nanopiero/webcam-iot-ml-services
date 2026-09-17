@@ -5,3 +5,4 @@
 -r requirements-image.txt
 -r requirements-solar.txt
 -r requirements-state.txt
+-r requirements-metrics.txt

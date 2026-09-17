@@ -1,0 +1,17 @@
+[Unit]
+Description=WEOW Grafana
+After=network-online.target weow-prometheus.service
+Wants=network-online.target weow-prometheus.service
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/weow-observability/grafana.env
+ExecStart=/usr/bin/podman run --name grafana --replace --rm --network weow-observability --publish 192.168.1.6:3000:3000 --env-file %h/.config/weow-observability/grafana.env --volume weow-grafana-data:/var/lib/grafana:U --volume %h/.config/weow-observability/grafana/provisioning:/etc/grafana/provisioning:ro,Z --volume %h/.config/weow-observability/grafana/dashboards:/var/lib/grafana/dashboards:ro,Z docker.io/grafana/grafana:13.2.0
+ExecStop=/usr/bin/podman stop --time 30 grafana
+ExecStopPost=-/usr/bin/podman rm --force grafana
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

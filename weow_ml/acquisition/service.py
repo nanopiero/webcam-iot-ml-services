@@ -10,11 +10,13 @@ import sys
 import threading
 
 import paho.mqtt.client as mqtt
+from prometheus_client import start_http_server
 
 from .archive import s3_client
 from .contracts import ContractError, parse_notification
 from .handler import NotificationHandler
 from .kafka import KafkaPublisher
+from .metrics import AcquisitionMetrics
 from .registry import Registry
 from .state import InitialStatePublisher
 from .workers import AcquisitionWorkers
@@ -27,11 +29,12 @@ LOG = logging.getLogger("weow.acquisition")
 class MQTTService:
     """Subscribe and couple MQTT acknowledgement to completed handling."""
 
-    def __init__(self, settings, workers, client=None):
+    def __init__(self, settings, workers, client=None, metrics=None):
         if str(settings.get("protocol")) != "5" or settings.get("qos") not in (1, 2):
             raise ValueError("operational Acquisition requires MQTT v5 with QoS 1 or 2")
         self.settings = dict(settings)
         self.workers = workers
+        self.metrics = metrics
         self.client = client or mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=settings["client_id"],
@@ -68,6 +71,8 @@ class MQTTService:
     def _on_subscribe(self, client, userdata, mid, reason_codes, properties):
         if any(code.is_failure for code in reason_codes):
             self._fail(ConnectionError("MQTT subscription rejected"))
+        elif self.metrics is not None:
+            self.metrics.ready.set(1)
 
     def _ack(self, message):
         if self.client.ack(message.mid, message.qos) != mqtt.MQTT_ERR_SUCCESS:
@@ -75,8 +80,12 @@ class MQTTService:
 
     def _on_message(self, client, userdata, message):
         self.counters["received"] += 1
+        if self.metrics is not None:
+            self.metrics.notification("received")
         if message.retain:
             self.counters["retained"] += 1
+            if self.metrics is not None:
+                self.metrics.notification("retained")
             self._ack(message)
             return
         try:
@@ -84,6 +93,8 @@ class MQTTService:
             parse_notification(payload)
         except (UnicodeError, json.JSONDecodeError, ContractError, TypeError) as exc:
             self.counters["invalid"] += 1
+            if self.metrics is not None:
+                self.metrics.notification("invalid")
             LOG.warning("Invalid MQTT notification: %s", type(exc).__name__)
             self._ack(message)
             return
@@ -91,6 +102,8 @@ class MQTTService:
             future = self.workers.submit(payload)
         except Exception as exc:
             self.counters["failed"] += 1
+            if self.metrics is not None:
+                self.metrics.notification("failed")
             self._fail(exc)
             return
         with self._lock:
@@ -100,13 +113,18 @@ class MQTTService:
             with self._lock:
                 self._pending.discard(done)
             try:
-                done.result()
+                result = done.result()
                 self._ack(message)
             except Exception as exc:
                 self.counters["failed"] += 1
+                if self.metrics is not None:
+                    self.metrics.notification("failed")
                 self._fail(exc)
             else:
                 self.counters["completed"] += 1
+                if self.metrics is not None:
+                    self.metrics.notification("completed")
+                    self.metrics.handled(result)
 
         future.add_done_callback(completed)
 
@@ -114,6 +132,8 @@ class MQTTService:
         with self._lock:
             if self._fatal is None:
                 self._fatal = error
+        if self.metrics is not None:
+            self.metrics.ready.set(0)
         self.client.disconnect()
 
     def run(self):
@@ -127,11 +147,14 @@ class MQTTService:
             raise ConnectionError("MQTT network loop failed: " + mqtt.error_string(result))
 
     def close(self):
+        if self.metrics is not None:
+            self.metrics.ready.set(0)
         self.client.disconnect()
 
 
-def build_service(settings, secrets_dir):
+def build_service(settings, secrets_dir, metrics=None):
     acquisition = settings["acquisition"]
+    metrics = metrics or AcquisitionMetrics()
     solar = acquisition["solar"]
     spool_settings = settings["spool_s3"]
     archive_settings = settings["archive_s3"]
@@ -158,13 +181,15 @@ def build_service(settings, secrets_dir):
         InitialStatePublisher(nfs_root), publisher,
         solar["timestamp_field_by_network"], solar["default_timestamp_field"],
         solar["transition_margin_seconds"],
+        metrics=metrics,
     )
     workers = AcquisitionWorkers(
         handler, acquisition["workers"], acquisition["max_pending_notifications"],
         acquisition["retry_count"], acquisition["retry_admissible_age_seconds"],
         acquisition["retry_delay_seconds"],
+        metrics=metrics,
     )
-    return MQTTService(settings["mqtt"], workers), workers, publisher
+    return MQTTService(settings["mqtt"], workers, metrics=metrics), workers, publisher
 
 
 def preflight(settings, secrets_dir):
@@ -223,6 +248,11 @@ def main():
             print(json.dumps(preflight(settings, args.secrets_dir), sort_keys=True))
             return 0
         service, workers, publisher = build_service(settings, args.secrets_dir)
+        observability = settings["observability"]
+        start_http_server(
+            observability["port"], addr=observability["listen_address"],
+            registry=service.metrics.registry,
+        )
         service.run()
     except KeyboardInterrupt:
         LOG.info("Acquisition interrupted")

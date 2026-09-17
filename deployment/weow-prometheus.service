@@ -1,0 +1,17 @@
+[Unit]
+Description=WEOW Prometheus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name prometheus --replace --rm --network weow-observability --publish 192.168.1.6:9090:9090 --volume %h/.config/weow-observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z --volume %h/.config/weow-observability/alerts.yml:/etc/prometheus/alerts.yml:ro,Z --volume weow-prometheus-data:/prometheus:U docker.io/prom/prometheus:v3.12.0 --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=15d --storage.tsdb.retention.size=8GB
+ExecReload=/usr/bin/podman kill --signal HUP prometheus
+ExecStop=/usr/bin/podman stop --time 30 prometheus
+ExecStopPost=-/usr/bin/podman rm --force prometheus
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

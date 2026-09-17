@@ -1,0 +1,17 @@
+[Unit]
+Description=WEOW node exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/weow-node-exporter.env
+ExecStart=/usr/bin/podman run --name weow-node-exporter --replace --rm --network host --pid host --security-opt label=disable --volume /:/host:ro,rslave docker.io/prom/node-exporter:v1.9.1 --path.rootfs=/host --web.listen-address=${WEOW_PRIVATE_IP}:9100
+ExecStop=/usr/bin/podman stop --time 10 weow-node-exporter
+ExecStopPost=-/usr/bin/podman rm --force weow-node-exporter
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

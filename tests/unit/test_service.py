@@ -7,6 +7,7 @@ import unittest
 import paho.mqtt.client as mqtt
 
 from weow_ml.acquisition.service import MQTTService
+from weow_ml.acquisition.metrics import AcquisitionMetrics
 
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "notification_n0v0.json"
@@ -42,7 +43,9 @@ class Workers:
         if self.error:
             future.set_exception(self.error)
         else:
-            future.set_result("handled")
+            future.set_result(SimpleNamespace(
+                status="published", archived=True, archived_bytes=10, published_jobs=1,
+            ))
         return future
 
 
@@ -60,11 +63,14 @@ class MQTTServiceTests(unittest.TestCase):
 
     def test_success_is_acknowledged_after_handling_and_dup_is_not_filtered(self):
         client, workers = Client(), Workers()
-        service = MQTTService(self.settings, workers, client=client)
+        metrics = AcquisitionMetrics()
+        service = MQTTService(self.settings, workers, client=client, metrics=metrics)
         service._on_message(client, None, self.message(dup=True))
         self.assertEqual(len(workers.payloads), 1)
         self.assertEqual(client.acks, [(17, 1)])
         self.assertEqual(service.counters["completed"], 1)
+        self.assertEqual(metrics.notifications.labels("received")._value.get(), 1)
+        self.assertEqual(metrics.notifications.labels("completed")._value.get(), 1)
 
     def test_failure_disconnects_without_acknowledging(self):
         client = Client()

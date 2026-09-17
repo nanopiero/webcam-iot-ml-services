@@ -1,0 +1,25 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"type":"stat","title":"Acquisition ready","id":1,"gridPos":{"h":4,"w":4,"x":0,"y":0},"targets":[{"expr":"weow_acquisition_ready","legendFormat":"ready"}]},
+    {"type":"stat","title":"MQTT target up","id":2,"gridPos":{"h":4,"w":4,"x":4,"y":0},"targets":[{"expr":"up{job=\"acquisition\"}","legendFormat":"up"}]},
+    {"type":"timeseries","title":"Notification rate by outcome","id":3,"gridPos":{"h":8,"w":16,"x":8,"y":0},"targets":[{"expr":"sum by (outcome) (rate(weow_acquisition_notifications_total[5m]))","legendFormat":"{{outcome}}"}]},
+    {"type":"timeseries","title":"Worker pressure","id":4,"gridPos":{"h":8,"w":8,"x":0,"y":4},"targets":[{"expr":"weow_acquisition_worker_queue","legendFormat":"queued"},{"expr":"weow_acquisition_active_workers","legendFormat":"active"}]},
+    {"type":"timeseries","title":"Terminal image outcomes","id":5,"gridPos":{"h":8,"w":8,"x":8,"y":8},"targets":[{"expr":"sum by (outcome) (rate(weow_acquisition_images_total[5m]))","legendFormat":"{{outcome}}"}]},
+    {"type":"timeseries","title":"Stage p95 latency","id":6,"gridPos":{"h":8,"w":8,"x":16,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, stage) (rate(weow_acquisition_stage_seconds_bucket[5m])))","legendFormat":"{{stage}}"}]},
+    {"type":"timeseries","title":"Stage failures","id":7,"gridPos":{"h":8,"w":8,"x":0,"y":12},"targets":[{"expr":"sum by (stage) (increase(weow_acquisition_stage_failures_total[5m]))","legendFormat":"{{stage}}"}]},
+    {"type":"timeseries","title":"Published jobs and archived images","id":8,"gridPos":{"h":8,"w":8,"x":8,"y":16},"targets":[{"expr":"rate(weow_acquisition_jobs_published_total[5m])","legendFormat":"jobs/s"},{"expr":"sum(rate(weow_acquisition_images_total{outcome!=\"blacklisted\"}[5m]))","legendFormat":"archived images/s"}]},
+    {"type":"timeseries","title":"Archive throughput","id":9,"gridPos":{"h":8,"w":8,"x":16,"y":16},"targets":[{"expr":"rate(weow_acquisition_archived_bytes_total[5m])","legendFormat":"bytes/s"}]},
+    {"type":"timeseries","title":"Host filesystem free percent","id":10,"gridPos":{"h":8,"w":24,"x":0,"y":24},"targets":[{"expr":"100 * node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\"}","legendFormat":"{{instance}} {{mountpoint}}"}]}
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["weow", "acquisition"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "WEOW Acquisition",
+  "uid": "weow-acquisition",
+  "version": 1
+}

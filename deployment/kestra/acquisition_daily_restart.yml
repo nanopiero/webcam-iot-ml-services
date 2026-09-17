@@ -1,0 +1,29 @@
+id: acquisition_daily_restart
+namespace: weow.operations
+description: Reconstruct Acquisition dictionaries with one controlled restart at 00:00 UTC.
+
+tasks:
+  - id: restart
+    type: io.kestra.plugin.fs.ssh.Command
+    host: 192.168.1.135
+    port: "22"
+    username: codexuser
+    authMethod: PUBLIC_KEY
+    privateKey: "{{ secret('WEOW_A_SSH_PRIVATE_KEY') }}"
+    commands:
+      - systemctl --user restart weow-acquisition.service
+      - systemctl --user is-active weow-acquisition.service
+    retry:
+      type: constant
+      interval: PT30S
+      maxAttempts: 2
+    timeout: PT2M
+
+triggers:
+  - id: midnight_utc
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 0 * * *"
+    timezone: UTC
+    allowConcurrent: false
+    recoverMissedSchedules: NONE
+    disabled: true

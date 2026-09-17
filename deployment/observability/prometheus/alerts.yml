@@ -1,0 +1,45 @@
+groups:
+  - name: acquisition
+    rules:
+      - alert: AcquisitionUnavailable
+        expr: up{job="acquisition"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Acquisition metrics are unavailable
+      - alert: AcquisitionNotReady
+        expr: weow_acquisition_ready == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Acquisition is not subscribed to MQTT
+      - alert: AcquisitionQueueGrowing
+        expr: weow_acquisition_worker_queue > 100
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Acquisition has more than 100 queued notifications
+      - alert: AcquisitionFailures
+        expr: increase(weow_acquisition_notifications_total{outcome="failed"}[5m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: Acquisition stopped after a notification failure
+
+  - name: capacity
+    rules:
+      - alert: HostFilesystemLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.15
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Low free space on {{ $labels.instance }} {{ $labels.mountpoint }}"
+      - alert: HostFilesystemCritical
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.08
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Critical free space on {{ $labels.instance }} {{ $labels.mountpoint }}"

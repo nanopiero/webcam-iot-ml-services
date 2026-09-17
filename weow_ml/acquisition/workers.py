@@ -11,7 +11,7 @@ class AcquisitionWorkers:
 
     def __init__(self, handler, workers, max_pending_notifications, retry_count,
                  retry_admissible_age_seconds, retry_delay_seconds=0.25,
-                 clock=None, monotonic=None, sleep=None):
+                 clock=None, monotonic=None, sleep=None, metrics=None):
         if type(workers) is not int or workers <= 0:
             raise ValueError("workers must be a positive integer")
         if type(max_pending_notifications) is not int or max_pending_notifications < 0:
@@ -27,6 +27,7 @@ class AcquisitionWorkers:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.monotonic = monotonic or time.monotonic
         self.sleep = sleep or time.sleep
+        self.metrics = metrics
         self._executor = ThreadPoolExecutor(max_workers=workers,
                                             thread_name_prefix="acquisition")
         # Running tasks plus configured pending notifications are admitted.
@@ -41,28 +42,40 @@ class AcquisitionWorkers:
                 raise RuntimeError("worker pool is closed")
         if not self._capacity.acquire(timeout=timeout):
             raise TimeoutError("acquisition worker queue is full")
+        if self.metrics is not None:
+            self.metrics.queue.inc()
         try:
             availability = self.clock()
             started = self.monotonic()
             future = self._executor.submit(self._run, payload, availability, started)
         except BaseException:
+            if self.metrics is not None:
+                self.metrics.queue.dec()
             self._capacity.release()
             raise
         future.add_done_callback(lambda completed: self._capacity.release())
         return future
 
     def _run(self, payload, availability, started):
+        if self.metrics is not None:
+            self.metrics.queue.dec()
+            self.metrics.active_workers.inc()
+            self.metrics.queue_wait_seconds.observe(self.monotonic() - started)
         failures = 0
-        while True:
-            try:
-                return self.handler.handle(payload, acquisition_timestamp=availability)
-            except Exception:
-                if (failures >= self.retry_count
-                        or self.monotonic() - started > self.retry_admissible_age_seconds):
-                    raise
-                failures += 1
-                if self.retry_delay_seconds:
-                    self.sleep(self.retry_delay_seconds)
+        try:
+            while True:
+                try:
+                    return self.handler.handle(payload, acquisition_timestamp=availability)
+                except Exception:
+                    if (failures >= self.retry_count
+                            or self.monotonic() - started > self.retry_admissible_age_seconds):
+                        raise
+                    failures += 1
+                    if self.retry_delay_seconds:
+                        self.sleep(self.retry_delay_seconds)
+        finally:
+            if self.metrics is not None:
+                self.metrics.active_workers.dec()
 
     def close(self, wait=True):
         with self._lock:
