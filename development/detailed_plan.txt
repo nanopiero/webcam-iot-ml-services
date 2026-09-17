@@ -28,6 +28,9 @@ and eligibility; fleet size alone does not determine retained volume.
 WP1.1 — Configuration, contracts, and initial database
 Dependencies: none.
 Tasks:
+- Establish and document service package boundaries, dependency direction,
+  transaction boundaries, diagnostic entry points, and unit/integration test
+  placement before extending the live Acquisition path.
 - Define deployment configuration for MQTT, spool/archive S3, NFS, PostgreSQL,
   Kafka, stream-generation rules, worker concurrency, and operation timeouts.
 - Capture representative upstream notifications and document the fields used
@@ -37,8 +40,8 @@ Tasks:
   partition assignments required by Acquisition.
 - Specify dictionary initialization and synchronized metadata updates, with
   deterministic stream/profile resolution and stable partition allocation.
-Deliverables: configuration template, schema/migrations, notification fixtures,
-and acquisition data-contract notes.
+Deliverables: code-organization note, configuration template, schema/migrations,
+notification fixtures, and acquisition data-contract notes.
 Completion: existing and newly discovered streams can be resolved consistently,
 including concurrent discovery, metadata changes, and recurring profiles.
 

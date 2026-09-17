@@ -34,6 +34,17 @@ The processing architecture is designed to support both near-real-time operation
 
 ## Development status
 
+The acquisition implementation now provides validated notification contracts,
+a PostgreSQL stream registry, solar and status policies, verified S3 archival,
+atomic NFS image publication, acknowledged Kafka jobs, and bounded worker
+concurrency. A versioned initial-state NPZ contract is also defined. The
+runnable MQTT service composition remains in progress and is paused until the
+Acquisition VM memory and Kafka storage are upgraded.
+See [the acquisition development notes](development/acquisition_contract.md)
+for usage, tests, infrastructure observations, and remaining integration work.
+The service boundaries and dependency rules are recorded in
+[the code-organization note](development/code_organization.md).
+
 This repository is currently under active development. The architecture and the pre-existing WEOW implementation should be considered the primary references while the new services are being implemented.
 
 ### Temporary development references
@@ -41,14 +52,13 @@ This repository is currently under active development. The architecture and the 
 The following paths are local development references and are intended to be removed from this README once the implementation is sufficiently mature:
 
 * Intended ML-services architecture:
-  `~/doc/ML_service_architecture/architecture`
+  `~/doc/ML_services_architecture/architecture`
 
 * Architecture of the upstream ingestion service:
-  `~/doc/ML_service_architecture/architecture_upstream_ingestion_service`
+  `~/doc/ML_services_architecture/architecture_upstream_ingestion_service`
 
 * Previous WEOW implementation:
-  `~/doc/ML_service_architecture/WEOW`
+  `~/doc/ML_services_architecture/WEOW`
 
 * Development plan to be followed during implementation:
-  `~/doc/ML_service_architecture/plan`
-
+  `~/doc/ML_services_architecture/plan`

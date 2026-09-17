@@ -1,0 +1,16 @@
+[Unit]
+Description=WEOW PostgreSQL acquisition database
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name weow-postgres --replace --rm -v weow-postgres-data:/var/lib/postgresql/data --publish 192.168.1.145:5432:5432 --env POSTGRES_DB=weow_ml --env POSTGRES_PASSWORD_FILE=/run/secrets/weow-postgres-password --secret weow-postgres-password docker.io/library/postgres:16-bookworm
+ExecStop=/usr/bin/podman stop --time 30 weow-postgres
+ExecStopPost=-/usr/bin/podman rm --force weow-postgres
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

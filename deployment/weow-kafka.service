@@ -1,0 +1,16 @@
+[Unit]
+Description=WEOW single-node Kafka 4.1.2 broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name weow-kafka --replace --rm --hostname weow-kafka --publish 192.168.1.135:9092:9092 --volume weow-kafka-data:/var/lib/kafka/data:U,Z --env-file %h/.config/weow-kafka/cluster.env --env KAFKA_NODE_ID=1 --env KAFKA_PROCESS_ROLES=broker,controller --env KAFKA_CONTROLLER_QUORUM_VOTERS=1@weow-kafka:29093 --env KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,CLIENT:PLAINTEXT --env KAFKA_LISTENERS=CONTROLLER://:29093,INTERNAL://:19092,CLIENT://:9092 --env KAFKA_ADVERTISED_LISTENERS=INTERNAL://weow-kafka:19092,CLIENT://192.168.1.135:9092 --env KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL --env KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER --env KAFKA_LOG_DIRS=/var/lib/kafka/data --env KAFKA_AUTO_CREATE_TOPICS_ENABLE=false --env KAFKA_NUM_PARTITIONS=50 --env KAFKA_DEFAULT_REPLICATION_FACTOR=1 --env KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 --env KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 --env KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 --env KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR=1 --env KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR=1 --env KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 --env KAFKA_LOG_RETENTION_HOURS=8760 --env KAFKA_LOG_SEGMENT_BYTES=268435456 --env "KAFKA_HEAP_OPTS=-Xms512m -Xmx1g" docker.io/apache/kafka:4.1.2
+ExecStop=/usr/bin/podman stop --time 30 weow-kafka
+ExecStopPost=-/usr/bin/podman rm --force weow-kafka
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

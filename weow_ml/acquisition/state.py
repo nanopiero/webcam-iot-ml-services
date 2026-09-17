@@ -1,0 +1,47 @@
+"""Versioned initial processing-stream state stored on NFS."""
+
+from io import BytesIO
+from pathlib import PurePosixPath
+
+import numpy as np
+
+from .contracts import identifier
+from .nfs import publish_bytes_once
+
+
+STATE_SCHEMA = "S0V0"
+LATENT_DIMENSION = 2048
+
+
+def initial_state_bytes():
+    output = BytesIO()
+    np.savez(
+        output,
+        schema_version=np.array(STATE_SCHEMA),
+        latent_bank=np.empty((0, LATENT_DIMENSION), dtype=np.float32),
+        latent_counts=np.empty((0,), dtype=np.int64),
+        freshness_signature=np.empty((0,), dtype=np.float64),
+        last_ingestion_timestamp=np.empty((0,), dtype="datetime64[ns]"),
+    )
+    return output.getvalue()
+
+
+class InitialStatePublisher:
+    def __init__(self, nfs_root):
+        self.nfs_root = nfs_root
+        self.content = initial_state_bytes()
+
+    def ensure(self, processing_stream_id, processing_image_path):
+        identifier(processing_stream_id, "processing_stream_id")
+        parent = PurePosixPath(processing_image_path).parent
+        relative = parent / f"{processing_stream_id}_state_initial.npz"
+        path, created = publish_bytes_once(self.nfs_root, str(relative), self.content)
+        if not created:
+            with np.load(path, allow_pickle=False) as state:
+                if (str(state["schema_version"]) != STATE_SCHEMA
+                        or state["latent_bank"].shape != (0, LATENT_DIMENSION)
+                        or state["latent_counts"].shape != (0,)
+                        or state["freshness_signature"].shape != (0,)
+                        or state["last_ingestion_timestamp"].shape != (0,)):
+                    raise ValueError("Existing initial state has an incompatible schema")
+        return path, created

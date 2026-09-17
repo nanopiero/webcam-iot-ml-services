@@ -33,3 +33,17 @@ acquisition recovery or reconciliation mechanism is required.
 Remove the suggestion to skip MQTT notifications solely because msg.dup=1.
 The MQTT DUP flag does not establish that the application has already handled
 the notification, so it must not be used alone as a reason to discard it.
+
+
+Choice: exclude webcams more than two degrees north of the Arctic Circle
+
+Reference: ~/doc/ML_services_architecture/architecture:1710
+Section: Acquisition timestamp and solar phase.
+
+For the pilot, a derived stream whose preferred latitude is greater than
+68.56 degrees north is automatically blacklisted. The preferred latitude is
+the source-stream latitude when present and otherwise the site latitude. This
+avoids sending images into near-real-time processing where same-day sunrise or
+sunset may be undefined and the required solar phase and offsets cannot be
+produced reliably. As for other blacklisted streams, metadata changes are
+retained, while images are not downloaded, archived, or published as jobs.

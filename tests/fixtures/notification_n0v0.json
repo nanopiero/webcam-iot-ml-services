@@ -1,0 +1,63 @@
+{
+  "schema_version": "N0V0",
+  "image_id": "20260415T102500Z_fin12345P01T0.jpg",
+  "storage": {
+    "type": "s3",
+    "bucket": "webcam-ingestion-buffer",
+    "object_key": "T0/fin/2026/04/15/10/20260415T102500Z_fin12345P01T0.jpg"
+  },
+  "network": {
+    "network_id": "fin"
+  },
+  "site": {
+    "site_id": "fin12345",
+    "latitude": 60.12345,
+    "longitude": 24.12345,
+    "altitude": 42.0,
+    "country": "FI",
+    "provider_metadata": {}
+  },
+  "source_stream": {
+    "source_stream_id": "fin12345P01",
+    "selected_rendition": "full_jpeg",
+    "provider_stream_id": "C1451601",
+    "latitude": 60.12345,
+    "longitude": 24.12345,
+    "name": "Hyrynsalmi - Tie 5",
+    "tags": [
+      "beach",
+      "city"
+    ],
+    "downstream_user_connexion_infos": "https://...",
+    "provider_metadata": {}
+  },
+  "derived_stream": {
+    "derived_stream_id": "fin12345P01T0",
+    "transformation_version": "T0",
+    "transformation_metadata": {
+      "image_signature": 1.04467,
+      "jpeg_quality": 85,
+      "panoramic": false
+    }
+  },
+  "timestamps": {
+    "download_timestamp": "2026-04-15T10:25:00Z",
+    "provider_update_timestamp": "2026-04-15T10:20:00Z",
+    "publication_timestamp": "2026-04-15T10:25:03Z"
+  },
+  "source_image": {
+    "width": 1280,
+    "height": 720,
+    "format": "JPEG",
+    "size_bytes": 184522,
+    "colour_mode": "RGB"
+  },
+  "derived_image": {
+    "width": 512,
+    "height": 288,
+    "format": "JPEG",
+    "size_bytes": 48231,
+    "colour_mode": "RGB",
+    "colour_depth": 24
+  }
+}

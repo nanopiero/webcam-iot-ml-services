@@ -1,0 +1,49 @@
+{
+  "mqtt": {
+    "host": "192.168.1.97",
+    "port": 1883,
+    "topic": "webcam/T0",
+    "protocol": "5",
+    "qos": 1,
+    "client_id": "weow-acquisition-0",
+    "username_env": null,
+    "password_env": null,
+    "tls": false
+  },
+  "spool_s3": {
+    "endpoint_url": "REQUIRED",
+    "credentials_profile": "weow-spool"
+  },
+  "archive_s3": {
+    "endpoint_url": "REQUIRED",
+    "bucket": "REQUIRED",
+    "credentials_profile": "weow-archive"
+  },
+  "nfs": {"root": "/srv/weow-nfs", "capacity_gb": 200},
+  "postgres": {"dsn_env": "WEOW_DATABASE_DSN"},
+  "kafka": {
+    "bootstrap_servers": "192.168.1.135:9092",
+    "topic": "inference.jobs.live",
+    "partitions": 50,
+    "partition_hash": "sha256"
+  },
+  "acquisition": {
+    "workers": 4,
+    "max_pending_notifications": 1000,
+    "operation_timeout_seconds": 5,
+    "retry_count": 1,
+    "retry_admissible_age_seconds": 10,
+    "retry_delay_seconds": 0.25,
+    "generation_version": 0,
+    "maximum_processing_latitude": 68.56,
+    "solar": {
+      "transition_margin_seconds": 3600,
+      "default_timestamp_field": "download_timestamp",
+      "timestamp_field_by_network": {
+        "win": "download_timestamp",
+        "ska": "download_timestamp",
+        "fin": "download_timestamp"
+      }
+    }
+  }
+}

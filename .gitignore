@@ -150,6 +150,8 @@ activemq-data/
 # Environments
 .env
 .envrc
+# Local credentials: ignore .secrets directories at every repository depth.
+.secrets/
 .venv
 env/
 venv/
@@ -202,6 +204,9 @@ cython_debug/
 # .vscode/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
+
+# Local live notifications may contain provider metadata and source URLs.
+local-captures/
 
 # Ruff stuff:
 .ruff_cache/
