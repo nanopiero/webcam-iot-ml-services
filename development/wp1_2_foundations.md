@@ -28,8 +28,10 @@ segments. Automatic topic creation is disabled.
 
 The rootless service is defined in `deployment/weow-kafka.service` and installed
 by `deployment/bootstrap_kafka.sh`. Its KRaft cluster identifier is generated
-once into an ignored, mode-600 local environment file. Broker data are retained
-in the `weow-kafka-data` Podman volume.
+once into an ignored, mode-600 local environment file. Broker data are stored
+on the dedicated ext4 filesystem mounted at `/srv/weow-kafka`, which the user
+service requires before starting. The container bind-mounts
+`/srv/weow-kafka/data` at `/var/lib/kafka/data`.
 
 `codexuser` lingering is enabled on `weow-a`, so the user service persists after
 logout.
@@ -44,19 +46,18 @@ NFS validation published one marker through the application atomic-publication
 primitive, read the completed bytes from `weow-p0`, confirmed that no temporary
 name was visible, and removed the marker afterwards.
 
-## Capacity constraint before sustained Acquisition
+## Capacity status before sustained Acquisition
 
-`weow-a` currently has approximately 18 GB free on its 30 GB root filesystem.
-The Podman volume therefore supports broker integration and development only.
-It does not support the architecture's one-year Kafka retention or an extended
-acquisition-only backlog: the architecture estimates roughly 2--25 GB of job
-records per month before replication.
+`weow-a` has 7.5 GiB usable RAM. Kafka uses about 472 MB immediately after
+startup, leaving about 6.3 GiB available before Acquisition starts. The broker
+filesystem provides approximately 93 GiB usable free space. A further 100 GiB
+remains unallocated on the same block device for later expansion.
 
-Before sustained Acquisition starts, attach a dedicated block volume for Kafka,
-move the persistent broker data there, measure actual bytes per published job,
-and set capacity alerts and a controlled Acquisition stop threshold. The NFS
-volume is reserved for processing images and state and is not counted as Kafka
-capacity.
+The architecture estimates roughly 2--25 GB of job records per month before
+replication, so 100 GB does not guarantee one year at the upper estimate.
+Before sustained Acquisition starts, measure actual bytes per published job and
+set capacity alerts and a controlled stop threshold. The NFS volume is reserved
+for processing images and state and is not counted as Kafka capacity.
 
 References: the Apache Kafka 4.1 Docker image documentation and its official
 single-node plaintext example.

@@ -20,8 +20,13 @@ fi
 mkdir -p "$HOME/.config/systemd/user" "$cluster_directory"
 chmod 700 "$cluster_directory"
 
+if ! mountpoint -q /srv/weow-kafka || [ ! -w /srv/weow-kafka ]; then
+  echo "/srv/weow-kafka must be a writable dedicated mount" >&2
+  exit 2
+fi
+
 podman pull "$image"
-podman volume exists weow-kafka-data || podman volume create weow-kafka-data
+mkdir -p /srv/weow-kafka/data
 
 if [ ! -f "$cluster_environment" ]; then
   cluster_id=$(podman run --rm "$image" /opt/kafka/bin/kafka-storage.sh random-uuid)

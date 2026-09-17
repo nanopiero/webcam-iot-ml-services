@@ -1,7 +1,17 @@
 # Partial development status — 2026-09-17
 
-Development is deliberately paused before starting the live Acquisition
-service. The `weow-a` VM must be upgraded first.
+This file records the temporary pause before starting the live Acquisition
+service and the subsequent infrastructure upgrade.
+
+Update after the pause: the VM now has 7.5 GiB usable RAM, and a dedicated
+100 GiB partition is mounted at `/srv/weow-kafka`. Kafka has been migrated to
+that mount and validated. Approximately 100 GiB remains unallocated on the same
+disk for later expansion.
+
+Kafka is active and enabled again. It retained the 50-partition operational
+topic, completed an application-level produce/consume integration test, and
+reported zero service restarts. Immediately after startup it used about 472 MB,
+while the VM retained about 6.3 GiB available RAM. The VM still has no swap.
 
 ## Infrastructure state at the pause
 
@@ -14,17 +24,16 @@ service. The `weow-a` VM must be upgraded first.
   currently resides on that root filesystem.
 - `/srv/weow-nfs` is a separate 196 GiB filesystem with about 186 GiB free.
 
-## Required upgrade before resuming
+## Upgrade decision and operating limits
 
-1. Increase `weow-a` to at least 4 GiB of RAM; 8 GiB is preferred for Kafka and
-   Acquisition together. Add a small swap area for transient pressure.
-2. Attach a dedicated Kafka data volume. Size it from the architecture's
-   2--25 GB/month single-replica estimate and the desired one-year retention;
-   400--500 GB provides headroom for the upper estimate.
-3. Relocate `weow-kafka-data` to that volume before re-enabling the service.
-4. Keep Acquisition at four worker threads for the controlled start. Change
+1. The RAM upgrade is complete. Adding a small swap area remains recommended
+   for transient pressure.
+2. Kafka initially receives 100 GiB. Since the architecture estimates
+   2--25 GB/month, capacity alerts and a controlled stop threshold remain
+   mandatory; the unallocated reserve can extend the filesystem later.
+3. Keep Acquisition at four worker threads for the controlled start. Change
    this only after the WP1.5 benchmark measures throughput and peak memory.
-5. Treat the 200 GB NFS as controlled-launch capacity. Measure processing-image
+4. Treat the 200 GB NFS as controlled-launch capacity. Measure processing-image
    growth before widening the workload because checkpoint-based cleanup is not
    available until consumers run.
 
@@ -41,7 +50,7 @@ service. The `weow-a` VM must be upgraded first.
   empty cluster counts, and empty arrays representing null freshness signature
   and last ingestion timestamp. Publication is immutable and atomic.
 - The runnable MQTT service composition has not been started. It is the next
-  development task after the VM and Kafka storage upgrades.
+  development task now that the VM and Kafka storage upgrades are complete.
 
 ## Resume checks
 
