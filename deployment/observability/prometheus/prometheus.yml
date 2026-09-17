@@ -16,6 +16,11 @@ scrape_configs:
         labels:
           host: weow-a
 
+  - job_name: kestra
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["kestra:8081"]
+
   - job_name: nodes
     static_configs:
       - targets:

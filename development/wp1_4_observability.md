@@ -26,7 +26,14 @@ Deployment order:
 3. Permit TCP 3000 and 9090 on the private interface of `weow-o`, TCP 9101 on
    the private interface of `weow-a`, and TCP 9100 on each monitored VM.
 4. Add the SSH private key to Kestra's secret backend, import both flows, and
-   enable their triggers only when Acquisition is approved for launch.
+enable their triggers only when Acquisition is approved for launch.
+
+Kestra uses an isolated `kestra` role and database in the pilot's single
+PostgreSQL 16 instance. Its repository and queue are PostgreSQL-backed; workflow
+files use persistent local storage on `weow-o`. The standalone service is pinned
+to Kestra 2.0.2 with an eight-thread worker and a 2 GB JVM heap ceiling.
+The configured Basic Auth username is `admin@weow.local`; its generated password
+remains in the mode-0600 host configuration directory.
 
 The initial configuration does not infer data loss from a restart. It reports
 the stop and recovery and retains the accepted architecture behavior: in-flight

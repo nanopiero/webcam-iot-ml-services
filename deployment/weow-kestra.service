@@ -1,0 +1,17 @@
+[Unit]
+Description=WEOW Kestra standalone orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name kestra --replace --userns=keep-id:uid=1000,gid=1000 --network weow-observability --publish 192.168.1.6:8080:8080 --env-file %h/.config/weow-kestra/secrets.env --env "JAVA_OPTS=-Xms512m -Xmx2g" --volume %h/.config/weow-kestra/application.yml:/etc/kestra/application.yml:ro,Z --volume weow-kestra-storage:/app/storage:U --volume weow-kestra-tmp:/tmp/kestra-wd:U docker.io/kestra/kestra:v2.0.2 server standalone --worker-thread=8 --config /etc/kestra/application.yml
+ExecStop=/usr/bin/podman stop --time 30 kestra
+ExecStopPost=-/usr/bin/podman rm --force kestra
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target
