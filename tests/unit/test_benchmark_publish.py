@@ -6,7 +6,7 @@ import unittest
 import paho.mqtt.client as mqtt
 
 from weow_ml.benchmark.images import load_profiles
-from weow_ml.benchmark.publish import publish_workload, validate_spool_receipt
+from weow_ml.benchmark.publish import connect_client, publish_workload, validate_spool_receipt
 from weow_ml.benchmark.workload import SCENARIOS, Workload
 
 
@@ -47,7 +47,36 @@ class Clock:
         self.value += seconds
 
 
+class ConnectClient:
+    def __init__(self, complete=True):
+        self.complete = complete
+        self.on_connect = None
+        self.started = False
+
+    def connect(self, host, port, keepalive):
+        self.endpoint = host, port, keepalive
+
+    def loop_start(self):
+        self.started = True
+        if self.complete:
+            self.on_connect(self, None, None, type("Reason", (), {"is_failure": False})(), None)
+
+    def loop_stop(self):
+        self.started = False
+
+
 class BenchmarkPublishTests(unittest.TestCase):
+    def test_connection_barrier_waits_for_mqtt_v5_completion(self):
+        client = ConnectClient()
+        connect_client(client, {"host": "broker", "port": 1883}, 0.01)
+        self.assertTrue(client.started)
+        self.assertEqual(client.endpoint, ("broker", 1883, 30))
+
+        stalled = ConnectClient(complete=False)
+        with self.assertRaises(ConnectionError):
+            connect_client(stalled, {"host": "broker", "port": 1883}, 0.01)
+        self.assertFalse(stalled.started)
+
     def test_smoke_workload_is_paced_and_acknowledged(self):
         workload = Workload(
             json.loads((ROOT / "tests/fixtures/notification_n0v0.json").read_text()),

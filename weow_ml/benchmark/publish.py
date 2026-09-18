@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import threading
 import time
 
 import paho.mqtt.client as mqtt
@@ -14,6 +15,25 @@ from ..common.config import load_config
 from .guard import validate_benchmark_settings
 from .images import load_profiles
 from .workload import SCENARIOS, Workload
+
+
+def connect_client(client, settings, timeout_seconds):
+    connected = threading.Event()
+    failure = {}
+
+    def on_connect(client, userdata, flags, reason_code, properties):
+        if reason_code.is_failure:
+            failure["reason"] = str(reason_code)
+        else:
+            connected.set()
+
+    client.on_connect = on_connect
+    client.connect(settings["host"], settings["port"], keepalive=30)
+    client.loop_start()
+    if not connected.wait(timeout_seconds):
+        client.loop_stop()
+        reason = failure.get("reason", "timeout")
+        raise ConnectionError("benchmark MQTT connection failed: " + reason)
 
 
 def validate_spool_receipt(receipt, workload, bucket):
@@ -128,8 +148,9 @@ def main():
             os.environ[username_env], os.environ[password_env] if password_env else None
         )
     client.max_inflight_messages_set(args.max_inflight)
-    client.connect(mqtt_settings["host"], mqtt_settings["port"], keepalive=30)
-    client.loop_start()
+    connect_client(
+        client, mqtt_settings, settings["acquisition"]["operation_timeout_seconds"]
+    )
     try:
         result = publish_workload(
             client, mqtt_settings["topic"], workload,
