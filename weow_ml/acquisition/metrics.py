@@ -55,7 +55,15 @@ class AcquisitionMetrics:
         self.queue_wait_seconds = Histogram(
             "weow_acquisition_worker_queue_wait_seconds",
             "Time a notification waits before an Acquisition worker starts it.",
-            registry=self.registry,
+            buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5,
+                     5, 10, 30, 60, 120, 300), registry=self.registry,
+        )
+        self.completion_seconds = Histogram(
+            "weow_acquisition_notification_completion_seconds",
+            "MQTT receipt through successful terminal handling and acknowledgement.",
+            ("outcome",),
+            buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
+                     30, 60, 120, 300), registry=self.registry,
         )
         self.ready = Gauge(
             "weow_acquisition_ready",
@@ -83,3 +91,6 @@ class AcquisitionMetrics:
             self.archived_bytes.inc(result.archived_bytes)
         if result.published_jobs:
             self.jobs.inc(result.published_jobs)
+
+    def completed(self, result, elapsed_seconds):
+        self.completion_seconds.labels(outcome=result.status).observe(elapsed_seconds)

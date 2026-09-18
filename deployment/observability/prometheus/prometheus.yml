@@ -16,6 +16,12 @@ scrape_configs:
         labels:
           host: weow-a
 
+  - job_name: acquisition-benchmark
+    static_configs:
+      - targets: ["192.168.1.135:9102"]
+        labels:
+          host: weow-a
+
   - job_name: kestra
     metrics_path: /prometheus
     static_configs:

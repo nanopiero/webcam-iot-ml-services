@@ -11,7 +11,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-from .contracts import parse_notification
+from .contracts import parse_notification, prefixed_key
 
 
 def s3_client(endpoint, access_file, secret_file, ca_bundle=None):
@@ -67,10 +67,12 @@ def fetch_image(source, notification):
     return image
 
 
-def archive_image(destination, bucket, notification, image, acquisition):
+def archive_image(destination, bucket, notification, image, acquisition, key_prefix=""):
     """Store a verified image and its immutable acquisition sidecar."""
     digest = hashlib.sha256(image).hexdigest()
-    put_verified(destination, bucket, notification.archive_key, image, "image/jpeg")
+    archive_key = prefixed_key(key_prefix, notification.archive_key)
+    sidecar_key = prefixed_key(key_prefix, notification.sidecar_key)
+    put_verified(destination, bucket, archive_key, image, "image/jpeg")
     sidecar = {
         "notification": notification.payload,
         "acquisition": dict(acquisition, image_sha256=digest),
@@ -78,19 +80,19 @@ def archive_image(destination, bucket, notification, image, acquisition):
     sidecar_data = json.dumps(sidecar, ensure_ascii=False, allow_nan=False,
                               sort_keys=True, indent=2).encode("utf-8")
     try:
-        existing = read_object(destination, bucket, notification.sidecar_key)
+        existing = read_object(destination, bucket, sidecar_key)
     except ClientError as exc:
         if exc.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
             raise
-        put_verified(destination, bucket, notification.sidecar_key, sidecar_data, "application/json")
+        put_verified(destination, bucket, sidecar_key, sidecar_data, "application/json")
     else:
         stored = json.loads(existing)
         if (stored.get("notification") != notification.payload
                 or stored.get("acquisition", {}).get("image_sha256") != digest):
             raise ValueError("Existing sidecar does not match this notification/image")
     return {
-        "archive_key": notification.archive_key,
-        "sidecar_key": notification.sidecar_key,
+        "archive_key": archive_key,
+        "sidecar_key": sidecar_key,
         "bytes": len(image),
         "sha256": digest,
     }

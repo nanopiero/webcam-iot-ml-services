@@ -1,0 +1,13 @@
+[
+  {"name":"observed-352-01","width":352,"height":224,"size_bytes":14678,"panoramic":false},
+  {"name":"observed-352-02","width":352,"height":224,"size_bytes":21059,"panoramic":false},
+  {"name":"observed-352-03","width":352,"height":224,"size_bytes":15166,"panoramic":false},
+  {"name":"observed-352-04","width":352,"height":224,"size_bytes":20079,"panoramic":false},
+  {"name":"observed-352-05","width":352,"height":224,"size_bytes":20058,"panoramic":false},
+  {"name":"observed-400-01","width":400,"height":224,"size_bytes":19197,"panoramic":false},
+  {"name":"observed-400-02","width":400,"height":224,"size_bytes":24393,"panoramic":false},
+  {"name":"observed-400-03","width":400,"height":224,"size_bytes":29549,"panoramic":false},
+  {"name":"observed-400-04","width":400,"height":224,"size_bytes":14128,"panoramic":false},
+  {"name":"observed-400-05","width":400,"height":224,"size_bytes":24158,"panoramic":false},
+  {"name":"architecture-panorama","width":1600,"height":288,"size_bytes":150000,"panoramic":true}
+]

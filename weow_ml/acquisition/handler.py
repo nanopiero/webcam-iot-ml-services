@@ -29,7 +29,7 @@ class NotificationHandler:
     def __init__(self, registry, spool, archive, archive_bucket, nfs_root,
                  state_publisher, kafka_publisher, timestamp_fields,
                  default_timestamp_field, transition_margin_seconds, clock=None,
-                 metrics=None):
+                 metrics=None, output_prefix="", notification_guard=None):
         self.registry = registry
         self.spool = spool
         self.archive = archive
@@ -42,6 +42,8 @@ class NotificationHandler:
         self.transition_margin_seconds = transition_margin_seconds
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.metrics = metrics
+        self.output_prefix = output_prefix
+        self.notification_guard = notification_guard
 
     def _stage(self, name):
         if self.metrics is None:
@@ -55,6 +57,8 @@ class NotificationHandler:
             raise ValueError("acquisition timestamp must include a timezone")
         acquisition_timestamp = acquisition_timestamp.astimezone(timezone.utc)
         notification = parse_notification(payload)
+        if self.notification_guard is not None:
+            self.notification_guard(notification)
         with self._stage("registry"):
             resolution = self.registry.resolve(payload)
         if resolution.status == "blacklist":
@@ -82,12 +86,14 @@ class NotificationHandler:
                     "sunrise_offset_seconds": solar.sunrise_offset_seconds,
                     "sunset_offset_seconds": solar.sunset_offset_seconds,
                 },
-            })
+            }, key_prefix=self.output_prefix)
         if not decision.publish_jobs:
             return HandlingResult(notification.image_id, decision.reason, True, 0, len(image))
 
         with self._stage("image_preparation"):
-            prepared = prepare_processing_images(image, notification, resolution.streams)
+            prepared = prepare_processing_images(
+                image, notification, resolution.streams, self.output_prefix
+            )
         with self._stage("nfs_publish"):
             publish_processing_images(self.nfs_root, prepared)
         by_stream = {item.processing_stream_id: item for item in prepared}

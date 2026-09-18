@@ -6,6 +6,7 @@ import sys
 import unittest
 
 from weow_ml.acquisition import ContractError, parse_notification, partition_for
+from weow_ml.acquisition.contracts import prefixed_key
 
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "notification_n0v0.json"
@@ -68,6 +69,15 @@ class NotificationTests(unittest.TestCase):
     def test_nonpositive_partition_count_rejected(self):
         with self.assertRaises(ContractError):
             partition_for("stream", 0)
+
+    def test_output_prefix_is_relative_and_canonical(self):
+        self.assertEqual(
+            prefixed_key("benchmarks/wp1_5/run_001", "images/a.jpg"),
+            "benchmarks/wp1_5/run_001/images/a.jpg",
+        )
+        for prefix in ("/absolute", "trailing/", "a//b", "a/../b", "a\\b"):
+            with self.subTest(prefix=prefix), self.assertRaises(ContractError):
+                prefixed_key(prefix, "images/a.jpg")
 
     def test_cli_accepts_fixture(self):
         result = subprocess.run([sys.executable, "-m", "weow_ml", str(FIXTURE)],

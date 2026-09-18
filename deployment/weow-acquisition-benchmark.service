@@ -1,0 +1,15 @@
+[Unit]
+Description=WEOW Acquisition WP1.5 benchmark service
+After=network-online.target weow-kafka.service
+Wants=network-online.target weow-kafka.service
+RequiresMountsFor=/srv/weow-nfs
+ConditionPathExists=%h/src/webcam-iot-ml-services/.secrets/acquisition.benchmark.json
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --name weow-acquisition-benchmark --replace --rm --network host --memory 2g --pids-limit 512 --group-add keep-groups --security-opt label=disable --volume /srv/weow-nfs:/srv/weow-nfs:rw --volume %h/src/webcam-iot-ml-services/.secrets:/app/.secrets:ro --volume /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro localhost/weow-acquisition:dev --config /app/.secrets/acquisition.benchmark.json --secrets-dir /app/.secrets
+ExecStop=/usr/bin/podman stop --time 30 weow-acquisition-benchmark
+ExecStopPost=-/usr/bin/podman rm --force weow-acquisition-benchmark
+Restart=no
+TimeoutStartSec=120
+TimeoutStopSec=60

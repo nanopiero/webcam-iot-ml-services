@@ -20,6 +20,22 @@ def identifier(value: Any, field: str) -> str:
     return value
 
 
+def relative_prefix(value: Any, field: str = "output_prefix") -> str:
+    """Validate an optional relative hierarchy and return its canonical form."""
+    if value in (None, ""):
+        return ""
+    if (not isinstance(value, str) or value.startswith("/") or value.endswith("/")
+            or "\\" in value
+            or any(part in ("", ".", "..") for part in value.split("/"))):
+        raise ContractError(f"{field} must be a safe relative prefix")
+    return value
+
+
+def prefixed_key(prefix: str, key: str) -> str:
+    prefix = relative_prefix(prefix)
+    return f"{prefix}/{key}" if prefix else key
+
+
 def positive_integer(value: Any, field: str) -> int:
     if type(value) is not int or value <= 0:
         raise ContractError(f"{field} must be a positive integer")

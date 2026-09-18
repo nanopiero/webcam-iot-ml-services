@@ -50,15 +50,15 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 
-if ! podman exec weow-kafka /opt/kafka/bin/kafka-topics.sh \
-    --bootstrap-server 127.0.0.1:9092 --list | \
-    grep -Fxq inference.jobs.live; then
+for topic in inference.jobs.live inference.jobs.benchmark; do
+  if ! podman exec weow-kafka /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server 127.0.0.1:9092 --list | grep -Fxq "$topic"; then
+    podman exec weow-kafka /opt/kafka/bin/kafka-topics.sh \
+      --bootstrap-server 127.0.0.1:9092 \
+      --create --topic "$topic" --partitions 50 --replication-factor 1 \
+      --config cleanup.policy=delete --config retention.ms=31536000000 \
+      --config segment.bytes=268435456
+  fi
   podman exec weow-kafka /opt/kafka/bin/kafka-topics.sh \
-    --bootstrap-server 127.0.0.1:9092 \
-    --create --topic inference.jobs.live --partitions 50 --replication-factor 1 \
-    --config cleanup.policy=delete --config retention.ms=31536000000 \
-    --config segment.bytes=268435456
-fi
-
-podman exec weow-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server 127.0.0.1:9092 --describe --topic inference.jobs.live
+    --bootstrap-server 127.0.0.1:9092 --describe --topic "$topic"
+done

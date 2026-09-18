@@ -21,6 +21,7 @@ from .registry import Registry
 from .state import InitialStatePublisher
 from .workers import AcquisitionWorkers
 from ..common.config import database_settings, load_config
+from ..benchmark.guard import validate_benchmark_settings
 
 
 LOG = logging.getLogger("weow.acquisition")
@@ -79,6 +80,7 @@ class MQTTService:
             raise ConnectionError("MQTT acknowledgement failed")
 
     def _on_message(self, client, userdata, message):
+        received_at = self.metrics.monotonic() if self.metrics is not None else None
         self.counters["received"] += 1
         if self.metrics is not None:
             self.metrics.notification("received")
@@ -125,6 +127,7 @@ class MQTTService:
                 if self.metrics is not None:
                     self.metrics.notification("completed")
                     self.metrics.handled(result)
+                    self.metrics.completed(result, self.metrics.monotonic() - received_at)
 
         future.add_done_callback(completed)
 
@@ -164,8 +167,11 @@ def build_service(settings, secrets_dir, metrics=None):
     archive = s3_client(archive_settings["endpoint_url"],
                         archive_settings["access_key_file"], archive_settings["secret_key_file"],
                         settings.get("s3_ca_bundle"))
+    database_file = settings.get("postgres", {}).get("settings_file", "database.json")
+    connection_settings = database_settings(Path(secrets_dir) / database_file)
+    notification_guard = validate_benchmark_settings(settings, connection_settings)
     registry = Registry(
-        database_settings(Path(secrets_dir) / "database.json"),
+        connection_settings,
         partitions=settings["kafka"]["partitions"],
         generation=acquisition["generation_version"],
         free_water_tags=acquisition.get("free_water_tags", ()),
@@ -176,12 +182,14 @@ def build_service(settings, secrets_dir, metrics=None):
         timeout_seconds=acquisition["operation_timeout_seconds"],
     )
     nfs_root = Path(settings["nfs"]["root"])
+    output_prefix = acquisition.get("output_prefix", "")
     handler = NotificationHandler(
         registry, spool, archive, archive_settings["bucket"], nfs_root,
-        InitialStatePublisher(nfs_root), publisher,
+        InitialStatePublisher(nfs_root, output_prefix), publisher,
         solar["timestamp_field_by_network"], solar["default_timestamp_field"],
         solar["transition_margin_seconds"],
-        metrics=metrics,
+        metrics=metrics, output_prefix=output_prefix,
+        notification_guard=notification_guard,
     )
     workers = AcquisitionWorkers(
         handler, acquisition["workers"], acquisition["max_pending_notifications"],

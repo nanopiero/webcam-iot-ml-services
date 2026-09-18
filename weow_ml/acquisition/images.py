@@ -5,6 +5,7 @@ from io import BytesIO
 
 from PIL import Image, JpegImagePlugin, UnidentifiedImageError
 
+from .contracts import prefixed_key
 from .nfs import publish_bytes
 
 
@@ -19,15 +20,16 @@ class PreparedImage:
     content: bytes
 
 
-def processing_image_path(notification, processing_stream_id):
+def processing_image_path(notification, processing_stream_id, path_prefix=""):
     prefix = notification.derived_stream_id + "_"
     if not processing_stream_id.startswith(prefix):
         raise ProcessingImageError("processing stream does not belong to the notification")
     suffix = processing_stream_id[len(prefix):]
-    return notification.archive_key[:-4] + "_" + suffix + ".jpg"
+    path = notification.archive_key[:-4] + "_" + suffix + ".jpg"
+    return prefixed_key(path_prefix, path)
 
 
-def prepare_processing_images(image_bytes, notification, streams):
+def prepare_processing_images(image_bytes, notification, streams, path_prefix=""):
     """Return complete processing JPEGs without touching NFS."""
     try:
         with Image.open(BytesIO(image_bytes)) as source:
@@ -45,7 +47,9 @@ def prepare_processing_images(image_bytes, notification, streams):
             for stream in streams:
                 if not 0 <= stream.slice_left < stream.slice_right <= source.width:
                     raise ProcessingImageError("registered slice is outside image boundaries")
-                path = processing_image_path(notification, stream.processing_stream_id)
+                path = processing_image_path(
+                    notification, stream.processing_stream_id, path_prefix
+                )
                 if stream.slice_left == 0 and stream.slice_right == source.width:
                     content = image_bytes
                 else:

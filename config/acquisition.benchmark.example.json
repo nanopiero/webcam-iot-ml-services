@@ -1,36 +1,38 @@
 {
+  "benchmark": {"enabled": true, "run_id": "REQUIRED_RUN_ID"},
   "mqtt": {
     "host": "192.168.1.97",
     "port": 1883,
-    "topic": "webcam/T0",
+    "topic": "weow/benchmark/N0V0",
     "protocol": "5",
     "qos": 1,
-    "client_id": "weow-acquisition-0",
+    "client_id": "weow-benchmark-REQUIRED_RUN_ID",
     "username_env": null,
     "password_env": null,
     "tls": false
   },
   "spool_s3": {
     "endpoint_url": "REQUIRED",
-    "credentials_profile": "weow-spool"
+    "bucket": "iot-pilot-weow-storage",
+    "credentials_prefix": "weows"
   },
   "archive_s3": {
     "endpoint_url": "REQUIRED",
     "bucket": "REQUIRED",
-    "credentials_profile": "weow-archive"
+    "credentials_prefix": "weows"
   },
   "nfs": {"root": "/srv/weow-nfs", "capacity_gb": 200},
-  "postgres": {"settings_file": "database.json"},
+  "postgres": {"settings_file": "database.benchmark.json"},
   "kafka": {
     "bootstrap_servers": "192.168.1.135:9092",
-    "topic": "inference.jobs.live",
+    "topic": "inference.jobs.benchmark",
     "partitions": 50,
     "partition_hash": "sha256",
     "storage_capacity_gb": 100
   },
   "observability": {
     "listen_address": "192.168.1.135",
-    "port": 9101
+    "port": 9102
   },
   "acquisition": {
     "workers": 4,
@@ -40,16 +42,14 @@
     "retry_admissible_age_seconds": 10,
     "retry_delay_seconds": 0.25,
     "generation_version": 0,
-    "output_prefix": "",
+    "output_prefix": "benchmarks/wp1_5/REQUIRED_RUN_ID",
     "maximum_processing_latitude": 68.56,
     "free_water_tags": ["beach", "coast", "lake", "river", "port"],
     "solar": {
       "transition_margin_seconds": 3600,
       "default_timestamp_field": "download_timestamp",
       "timestamp_field_by_network": {
-        "win": "download_timestamp",
-        "ska": "download_timestamp",
-        "fin": "download_timestamp"
+        "benchmark": "download_timestamp"
       }
     }
   }

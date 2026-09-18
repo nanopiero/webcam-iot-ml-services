@@ -30,7 +30,7 @@ def main():
         raise ValueError("Unexpected generated credential format")
     if psql("postgres", "SELECT 1 FROM pg_roles WHERE rolname='weow_acquisition';") != "1":
         psql("postgres", f"CREATE ROLE weow_acquisition LOGIN PASSWORD '{password}';")
-    for database in ("weow_ml", "weow_ml_test"):
+    for database in ("weow_ml", "weow_ml_test", "weow_ml_benchmark"):
         if psql("postgres", f"SELECT 1 FROM pg_database WHERE datname='{database}';") != "1":
             psql("postgres", f"CREATE DATABASE {database};")
         if psql(database, "SELECT to_regclass('public.schema_migration') IS NOT NULL;") == "f":
@@ -53,6 +53,12 @@ def main():
     if not config_path.exists():
         with os.fdopen(os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
             json.dump(settings, file, indent=2)
+            file.write("\n")
+    benchmark_path = secret_dir / "database.benchmark.json"
+    benchmark_settings = dict(settings, dbname="weow_ml_benchmark")
+    if not benchmark_path.exists():
+        with os.fdopen(os.open(benchmark_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
+            json.dump(benchmark_settings, file, indent=2)
             file.write("\n")
 
 

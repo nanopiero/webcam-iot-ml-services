@@ -87,16 +87,18 @@ class HandlerTests(unittest.TestCase):
         self.stream = Stream("fin12345P01T0_P0S0V0", 0, 0, 512, True, True, 7)
         self.now = datetime(2026, 4, 15, 10, 25, 4, tzinfo=timezone.utc)
 
-    def handler(self, root, status="whitelist", streams=None):
+    def handler(self, root, status="whitelist", streams=None, output_prefix=""):
         streams = (self.stream,) if streams is None else streams
-        path = "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0_P0S0V0.jpg"
+        prefix = output_prefix + "/" if output_prefix else ""
+        path = prefix + "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0_P0S0V0.jpg"
         state = StatePublisher(root, [path] if streams else [])
-        archive_key = "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0.jpg"
+        archive_key = prefix + "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0.jpg"
         publisher = Publisher(self.archive, "archive", archive_key, state)
         handler = NotificationHandler(
             Registry(status, streams), self.spool, self.archive, "archive", root,
             state, publisher, {"fin": "download_timestamp"},
             "download_timestamp", 3600, clock=lambda: self.now,
+            output_prefix=output_prefix,
         )
         return handler, state, publisher
 
@@ -136,6 +138,21 @@ class HandlerTests(unittest.TestCase):
                          ("published", True, 1))
         self.assertEqual(state.streams, [self.stream.processing_stream_id])
         self.assertEqual(publisher.jobs[0].kafka_partition, 7)
+
+    def test_output_prefix_is_shared_by_archive_nfs_and_job(self):
+        with tempfile.TemporaryDirectory() as root:
+            prefix = "benchmarks/wp1_5/run_001"
+            handler, state, publisher = self.handler(root, output_prefix=prefix)
+            result = handler.handle(self.payload)
+            job_path = publisher.jobs[0].processing_image
+            self.assertTrue(job_path.startswith(prefix + "/images/"))
+            self.assertTrue((Path(root) / job_path).is_file())
+        self.assertTrue(result.archived)
+        archive_key = (
+            prefix + "/images/fin12345P01T0/2026/04/15/10/"
+            + self.payload["image_id"]
+        )
+        self.assertIn(("archive", archive_key), self.archive.objects)
 
 
 if __name__ == "__main__":

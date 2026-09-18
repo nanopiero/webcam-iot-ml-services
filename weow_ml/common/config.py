@@ -13,9 +13,13 @@ def load_config(path="config/acquisition.example.json", secrets_dir=".secrets"):
     if endpoint_file.exists():
         storage = json.loads(endpoint_file.read_text())
         for name in ("spool_s3", "archive_s3"):
-            settings[name].update(storage[name])
+            for key, value in storage[name].items():
+                if settings[name].get(key) in (None, "REQUIRED"):
+                    settings[name][key] = value
         settings["s3_ca_bundle"] = storage.get("ca_bundle")
-    for section, prefix in (("spool_s3", "ingestion"), ("archive_s3", "weows")):
+    for section, default_prefix in (("spool_s3", "ingestion"),
+                                    ("archive_s3", "weows")):
+        prefix = settings[section].get("credentials_prefix", default_prefix)
         settings[section]["access_key_file"] = str(directory / f"{prefix}_s3_access_key")
         settings[section]["secret_key_file"] = str(directory / f"{prefix}_s3_secret_key")
     return settings

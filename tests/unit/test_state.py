@@ -22,6 +22,18 @@ class InitialStateTests(unittest.TestCase):
         self.assertEqual(first, later)
         self.assertEqual(str(first), "images/test/state/test_P0S0V0_state_initial.npz")
 
+    def test_path_preserves_configured_benchmark_prefix(self):
+        prefix = "benchmarks/wp1_5/run_001"
+        image = prefix + "/images/test/2026/04/15/10/a_P0S0V0.jpg"
+        state = initial_state_path("test_P0S0V0", image, prefix)
+        self.assertEqual(
+            str(state), prefix + "/images/test/state/test_P0S0V0_state_initial.npz"
+        )
+        with self.assertRaisesRegex(ValueError, "configured prefix"):
+            initial_state_path(
+                "test_P0S0V0", "images/test/2026/04/15/10/a_P0S0V0.jpg", prefix
+            )
+
     def test_contract_is_pickle_free_and_empty(self):
         with np.load(BytesIO(initial_state_bytes()), allow_pickle=False) as state:
             self.assertEqual(str(state["schema_version"]), STATE_SCHEMA)

@@ -14,6 +14,7 @@ class MetricsTests(unittest.TestCase):
         metrics.handled(SimpleNamespace(
             status="published", archived=True, archived_bytes=1234, published_jobs=2,
         ))
+        metrics.completed(SimpleNamespace(status="published"), 0.75)
 
         exposition = generate_latest(metrics.registry).decode()
         self.assertIn(
@@ -24,6 +25,10 @@ class MetricsTests(unittest.TestCase):
         )
         self.assertIn("weow_acquisition_archived_bytes_total 1234.0", exposition)
         self.assertIn("weow_acquisition_jobs_published_total 2.0", exposition)
+        self.assertIn(
+            'weow_acquisition_notification_completion_seconds_sum{outcome="published"} 0.75',
+            exposition,
+        )
 
     def test_stage_failure_is_counted_and_propagated(self):
         times = iter((10.0, 10.25))
