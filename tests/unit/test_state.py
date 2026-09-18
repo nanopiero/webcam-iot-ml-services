@@ -1,4 +1,5 @@
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
 import unittest
@@ -55,14 +56,28 @@ class InitialStateTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(second.read_bytes(), original)
 
+    def test_concurrent_initialization_creates_one_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            publisher = InitialStatePublisher(root)
+            image = "images/test/2026/04/15/10/image_P0S0V0.jpg"
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = tuple(executor.map(
+                    lambda _: publisher.ensure("test_P0S0V0", image), range(16)
+                ))
+            self.assertEqual(sum(created for _, created in results), 1)
+            self.assertEqual(len({path for path, _ in results}), 1)
+
     def test_incompatible_existing_state_is_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             publisher = InitialStatePublisher(root)
             image = "images/test/2026/04/15/10/image_P0S0V0.jpg"
             path, _ = publisher.ensure("test_P0S0V0", image)
             path.write_bytes(b"not an npz")
+            cached, created = publisher.ensure("test_P0S0V0", image)
+            self.assertEqual(cached, path)
+            self.assertFalse(created)
             with self.assertRaises(ValueError):
-                publisher.ensure("test_P0S0V0", image)
+                InitialStatePublisher(root).ensure("test_P0S0V0", image)
 
 
 if __name__ == "__main__":

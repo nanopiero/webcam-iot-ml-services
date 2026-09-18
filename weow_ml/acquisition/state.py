@@ -1,7 +1,8 @@
 """Versioned initial processing-stream state stored on NFS."""
 
 from io import BytesIO
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+import threading
 
 import numpy as np
 
@@ -47,21 +48,33 @@ def initial_state_path(processing_stream_id, processing_image_path, path_prefix=
 
 class InitialStatePublisher:
     def __init__(self, nfs_root, path_prefix=""):
-        self.nfs_root = nfs_root
+        self.nfs_root = Path(nfs_root)
         self.path_prefix = relative_prefix(path_prefix)
         self.content = initial_state_bytes()
+        self._ready = set()
+        self._locks = {}
+        self._locks_guard = threading.Lock()
+
+    def _stream_lock(self, processing_stream_id):
+        with self._locks_guard:
+            return self._locks.setdefault(processing_stream_id, threading.Lock())
 
     def ensure(self, processing_stream_id, processing_image_path):
         relative = initial_state_path(
             processing_stream_id, processing_image_path, self.path_prefix
         )
-        path, created = publish_bytes_once(self.nfs_root, str(relative), self.content)
-        if not created:
-            with np.load(path, allow_pickle=False) as state:
-                if (str(state["schema_version"]) != STATE_SCHEMA
-                        or state["latent_bank"].shape != (0, LATENT_DIMENSION)
-                        or state["latent_counts"].shape != (0,)
-                        or state["freshness_signature"].shape != (0,)
-                        or state["last_ingestion_timestamp"].shape != (0,)):
-                    raise ValueError("Existing initial state has an incompatible schema")
-        return path, created
+        lock = self._stream_lock(processing_stream_id)
+        with lock:
+            if processing_stream_id in self._ready:
+                return self.nfs_root / relative, False
+            path, created = publish_bytes_once(self.nfs_root, str(relative), self.content)
+            if not created:
+                with np.load(path, allow_pickle=False) as state:
+                    if (str(state["schema_version"]) != STATE_SCHEMA
+                            or state["latent_bank"].shape != (0, LATENT_DIMENSION)
+                            or state["latent_counts"].shape != (0,)
+                            or state["freshness_signature"].shape != (0,)
+                            or state["last_ingestion_timestamp"].shape != (0,)):
+                        raise ValueError("Existing initial state has an incompatible schema")
+            self._ready.add(processing_stream_id)
+            return path, created
