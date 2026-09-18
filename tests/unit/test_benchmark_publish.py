@@ -6,7 +6,9 @@ import unittest
 import paho.mqtt.client as mqtt
 
 from weow_ml.benchmark.images import load_profiles
-from weow_ml.benchmark.publish import connect_client, publish_workload, validate_spool_receipt
+from weow_ml.benchmark.publish import (
+    connect_client, publish_workload, publisher_client_id, validate_spool_receipt,
+)
 from weow_ml.benchmark.workload import SCENARIOS, Workload
 
 
@@ -66,6 +68,12 @@ class ConnectClient:
 
 
 class BenchmarkPublishTests(unittest.TestCase):
+    def test_publisher_client_id_cannot_collide_with_subscriber(self):
+        service = "weow-benchmark-run_001"
+        self.assertEqual(publisher_client_id(service), service + "-publisher")
+        with self.assertRaises(ValueError):
+            publisher_client_id("weow-acquisition-0")
+
     def test_connection_barrier_waits_for_mqtt_v5_completion(self):
         client = ConnectClient()
         connect_client(client, {"host": "broker", "port": 1883}, 0.01)

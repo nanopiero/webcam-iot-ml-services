@@ -17,6 +17,12 @@ from .images import load_profiles
 from .workload import SCENARIOS, Workload
 
 
+def publisher_client_id(service_client_id):
+    if not service_client_id.startswith("weow-benchmark-"):
+        raise ValueError("benchmark service client ID is invalid")
+    return service_client_id + "-publisher"
+
+
 def connect_client(client, settings, timeout_seconds):
     connected = threading.Event()
     failure = {}
@@ -85,7 +91,9 @@ def publish_workload(client, topic, workload, timeout_seconds=10, max_inflight=2
             topic, json.dumps(payload, separators=(",", ":")), qos=1, retain=False
         )
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
-            raise ConnectionError("MQTT client rejected benchmark publication")
+            raise ConnectionError(
+                "MQTT client rejected benchmark publication: " + mqtt.error_string(info.rc)
+            )
         pending.append(info)
         published += 1
         if len(pending) >= max_inflight:
@@ -136,7 +144,8 @@ def main():
     validate_spool_receipt(json.loads(args.receipt.read_text()), workload, spool["bucket"])
     mqtt_settings = settings["mqtt"]
     client = mqtt.Client(
-        mqtt.CallbackAPIVersion.VERSION2, client_id=mqtt_settings["client_id"],
+        mqtt.CallbackAPIVersion.VERSION2,
+        client_id=publisher_client_id(mqtt_settings["client_id"]),
         protocol=mqtt.MQTTv5,
     )
     if mqtt_settings.get("tls"):
