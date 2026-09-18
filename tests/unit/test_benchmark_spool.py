@@ -52,6 +52,10 @@ class BenchmarkSpoolTests(unittest.TestCase):
         self.assertEqual(first["objects"], 12)
         self.assertEqual(first["bytes"], sum(map(len, client.objects.values())))
 
+    def test_worker_count_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            prepare_spool(MemoryS3(), "benchmark-spool", self.workload(), workers=0)
+
 
 if __name__ == "__main__":
     unittest.main()

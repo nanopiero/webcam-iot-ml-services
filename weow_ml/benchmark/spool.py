@@ -1,6 +1,7 @@
 """Prepare the isolated S3 test spool for one deterministic WP1.5 run."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
 from pathlib import Path
@@ -12,10 +13,12 @@ from .images import fixture_jpeg, load_profiles
 from .workload import SCENARIOS, Workload
 
 
-def prepare_spool(client, bucket, workload):
+def prepare_spool(client, bucket, workload, workers=16):
+    if type(workers) is not int or workers <= 0:
+        raise ValueError("spool workers must be a positive integer")
     fixtures = {profile.name: fixture_jpeg(profile) for profile in workload.profiles}
-    objects = total_bytes = 0
-    for payload in workload.events():
+
+    def upload(payload):
         storage = payload["storage"]
         if storage["bucket"] != bucket:
             raise ValueError("notification bucket differs from benchmark spool bucket")
@@ -23,8 +26,13 @@ def prepare_spool(client, bucket, workload):
         if len(content) != payload["derived_image"]["size_bytes"]:
             raise ValueError("fixture size differs from notification")
         put_verified(client, bucket, storage["object_key"], content, "image/jpeg")
-        objects += 1
-        total_bytes += len(content)
+        return len(content)
+
+    with ThreadPoolExecutor(max_workers=workers,
+                            thread_name_prefix="benchmark-spool") as executor:
+        sizes = tuple(executor.map(upload, workload.events()))
+    objects = len(sizes)
+    total_bytes = sum(sizes)
     return {"objects": objects, "bytes": total_bytes,
             "spool_prefix": workload.summary()["spool_prefix"]}
 
@@ -43,6 +51,8 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--receipt", type=Path, required=True,
                         help="new local JSON receipt required by the publisher")
+    parser.add_argument("--workers", type=int, default=16,
+                        help="bounded parallel S3 preparation requests")
     args = parser.parse_args()
 
     settings = load_config(args.config, args.secrets_dir)
@@ -63,7 +73,7 @@ def main():
         spool["endpoint_url"], spool["access_key_file"], spool["secret_key_file"],
         settings.get("s3_ca_bundle"),
     )
-    result = prepare_spool(client, spool["bucket"], workload)
+    result = prepare_spool(client, spool["bucket"], workload, args.workers)
     receipt = {
         **result, "run_id": run_id, "scenario": args.scenario,
         "start": start.isoformat(), "seed": args.seed, "bucket": spool["bucket"],

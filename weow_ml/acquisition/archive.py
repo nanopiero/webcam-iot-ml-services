@@ -26,6 +26,7 @@ def s3_client(endpoint, access_file, secret_file, ca_bundle=None):
         aws_secret_access_key=secret, region_name="us-east-1",
         verify=ca_bundle or True,
         config=Config(signature_version="s3v4", connect_timeout=10, read_timeout=30,
+                      max_pool_connections=32,
                       retries={"max_attempts": 1, "mode": "standard"},
                       s3={"addressing_style": "path"},
                       request_checksum_calculation="when_required",
