@@ -61,6 +61,23 @@ stop_if_running() {
 }
 trap stop_if_running EXIT INT TERM
 
+metrics=""
+for readiness_attempt in $(seq 1 24); do
+  if metrics=$(curl --fail --silent --max-time 5 "$metrics_url"); then
+    echo "metrics_ready_after_attempt=$readiness_attempt"
+    break
+  fi
+  if ! systemctl --user is-active --quiet "$service"; then
+    echo "benchmark service stopped before metrics became ready" >&2
+    exit 23
+  fi
+  sleep 5
+done
+if [[ -z "$metrics" ]]; then
+  echo "benchmark metrics did not become ready within 120 seconds" >&2
+  exit 24
+fi
+
 while systemctl --user is-active --quiet "$service"; do
   now_epoch=$(date +%s)
   elapsed=$((now_epoch - started_epoch))
