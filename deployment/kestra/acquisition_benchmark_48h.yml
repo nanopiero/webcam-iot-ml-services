@@ -1,0 +1,16 @@
+id: acquisition_benchmark_48h
+namespace: weow.benchmarks
+description: Run and visibly monitor the isolated 48-hour live Acquisition endurance test.
+
+tasks:
+  - id: run_and_follow
+    type: io.kestra.plugin.fs.ssh.Command
+    host: 192.168.1.135
+    port: "22"
+    username: codexuser
+    authMethod: PUBLIC_KEY
+    privateKey: "{{ secret('WEOW_A_SSH_PRIVATE_KEY') }}"
+    commands:
+      - bash ~/src/webcam-iot-ml-services/deployment/run_48h_acquisition_benchmark.sh
+    timeout: PT50H
+

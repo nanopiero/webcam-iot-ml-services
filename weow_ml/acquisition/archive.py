@@ -1,8 +1,10 @@
 """Bounded spool-to-archive transfer, without inference or Kafka publication."""
 
 import argparse
+import gzip
 import hashlib
 import json
+import struct
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -46,11 +48,16 @@ def read_object(client, bucket, key, limit=10 * 1024 * 1024):
         body.close()
 
 
-def put_if_absent(client, bucket, key, data, content_type):
+def put_if_absent(client, bucket, key, data, content_type, metadata=None):
     """Return True after an acknowledged create, False when the key exists."""
     try:
-        client.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type,
-                          IfNoneMatch="*")
+        arguments = {
+            "Bucket": bucket, "Key": key, "Body": data,
+            "ContentType": content_type, "IfNoneMatch": "*",
+        }
+        if metadata is not None:
+            arguments["Metadata"] = metadata
+        client.put_object(**arguments)
     except ClientError as exc:
         if exc.response["ResponseMetadata"]["HTTPStatusCode"] != 412:
             raise
@@ -73,29 +80,82 @@ def fetch_image(source, notification):
     return image
 
 
+_SIDECAR_MAGIC = b"WEOWSC1"
+_SIDECAR_HEADER = struct.Struct(">7sII")
+_APP15_PAYLOAD_LIMIT = 65533
+
+
+def bundle_image_sidecar(image, sidecar_data):
+    """Embed a compressed JSON sidecar in JPEG APP15 segments."""
+    if not image.startswith(b"\xff\xd8") or not image.endswith(b"\xff\xd9"):
+        raise ValueError("Archive image is not a complete JPEG byte stream")
+    compressed = gzip.compress(sidecar_data, mtime=0)
+    chunk_size = _APP15_PAYLOAD_LIMIT - _SIDECAR_HEADER.size
+    chunks = tuple(compressed[offset:offset + chunk_size]
+                   for offset in range(0, len(compressed), chunk_size)) or (b"",)
+    segments = []
+    for index, chunk in enumerate(chunks):
+        payload = _SIDECAR_HEADER.pack(_SIDECAR_MAGIC, index, len(chunks)) + chunk
+        segments.append(b"\xff\xef" + struct.pack(">H", len(payload) + 2) + payload)
+    return image[:2] + b"".join(segments) + image[2:]
+
+
+def unbundle_image_sidecar(bundle):
+    """Recover the exact source JPEG and JSON sidecar from an archive object."""
+    if not bundle.startswith(b"\xff\xd8"):
+        raise ValueError("Archive object is not a JPEG bundle")
+    offset = 2
+    chunks = []
+    expected_count = None
+    while bundle[offset:offset + 2] == b"\xff\xef":
+        if offset + 4 > len(bundle):
+            raise ValueError("Truncated archive sidecar segment")
+        segment_length = struct.unpack(">H", bundle[offset + 2:offset + 4])[0]
+        end = offset + 2 + segment_length
+        payload = bundle[offset + 4:end]
+        if end > len(bundle) or len(payload) < _SIDECAR_HEADER.size:
+            raise ValueError("Truncated archive sidecar segment")
+        magic, index, count = _SIDECAR_HEADER.unpack(
+            payload[:_SIDECAR_HEADER.size]
+        )
+        if magic != _SIDECAR_MAGIC:
+            break
+        if index != len(chunks) or count == 0 or (expected_count not in (None, count)):
+            raise ValueError("Invalid archive sidecar segment sequence")
+        expected_count = count
+        chunks.append(payload[_SIDECAR_HEADER.size:])
+        offset = end
+    if expected_count is None or len(chunks) != expected_count:
+        raise ValueError("Archive sidecar segments are missing")
+    try:
+        sidecar = json.loads(gzip.decompress(b"".join(chunks)))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Archive sidecar is invalid") from exc
+    return bundle[:2] + bundle[offset:], sidecar
+
+
 def archive_image(destination, bucket, notification, image, acquisition, key_prefix=""):
-    """Store a verified image and its immutable acquisition sidecar."""
+    """Store an image and its immutable sidecar in one conditional S3 PUT."""
     digest = hashlib.sha256(image).hexdigest()
     archive_key = prefixed_key(key_prefix, notification.archive_key)
-    sidecar_key = prefixed_key(key_prefix, notification.sidecar_key)
-    put_verified(destination, bucket, archive_key, image, "image/jpeg")
     sidecar = {
         "notification": notification.payload,
         "acquisition": dict(acquisition, image_sha256=digest),
     }
     sidecar_data = json.dumps(sidecar, ensure_ascii=False, allow_nan=False,
                               sort_keys=True, indent=2).encode("utf-8")
-    if not put_if_absent(
-        destination, bucket, sidecar_key, sidecar_data, "application/json"
-    ):
-        existing = read_object(destination, bucket, sidecar_key)
-        stored = json.loads(existing)
-        if (stored.get("notification") != notification.payload
+    bundle = bundle_image_sidecar(image, sidecar_data)
+    if not put_if_absent(destination, bucket, archive_key, bundle, "image/jpeg"):
+        existing_image, stored = unbundle_image_sidecar(
+            read_object(destination, bucket, archive_key, limit=len(bundle))
+        )
+        if (existing_image != image
+                or stored.get("notification") != notification.payload
                 or stored.get("acquisition", {}).get("image_sha256") != digest):
-            raise ValueError("Existing sidecar does not match this notification/image")
+            raise ValueError("Existing archive object does not match this image/sidecar")
     return {
         "archive_key": archive_key,
-        "sidecar_key": sidecar_key,
+        "sidecar_key": None,
         "bytes": len(image),
         "sha256": digest,
     }

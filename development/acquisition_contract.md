@@ -12,7 +12,7 @@ with its `provider_metadata` placeholders replaced by empty objects. It is not
 a capture from the running ingestion system. The first live contract check is
 recorded below; other networks still need sampling.
 
-The parser preserves the full notification for a future archive sidecar. It
+The parser preserves the full notification for the archived sidecar. It
 validates source dimensions and colour representation, image identity, timestamps,
 S3 references, derived dimensions, and the scalar freshness signature. It accepts
 unknown fields and never filters on the MQTT DUP flag. Archive names follow the
@@ -158,7 +158,7 @@ Install `requirements-s3.txt`, then run with confirmed endpoint URLs and bucket:
 The command reads the four ingestion/weows access/secret key files directly
 from `.secrets/`, without logging their contents. It copies complete unsliced
 images into the architecture's `images/{derived_stream_id}/yyyy/mm/dd/hh/`
-hierarchy and writes JSON sidecars. Conditional creation prevents replacement of
+hierarchy and embeds compressed JSON sidecars in JPEG APP15 segments. Conditional creation prevents replacement of
 existing objects; repeated transfers accept matching content. Both uploaded
 objects are read back and checked. This uses the S3
 [conditional PUT API](https://docs.aws.amazon.com/boto3/latest/reference/services/s3/client/put_object.html);
@@ -168,8 +168,8 @@ This is an archival integration check, not operational Acquisition. Sidecars
 explicitly mark processing context as unresolved and do not invent stream IDs
 or the original MQTT receipt timestamp. No Kafka jobs are created. JPEG marker
 checks reject obvious invalid payloads but do not replace full image decoding.
-Transfers are bounded to 10 MiB per object. Image and sidecar writes are separate;
-a sidecar failure leaves the verified image available for a retry.
+Transfers are bounded to 10 MiB per source object. Each archive image and its
+sidecar use one conditional PUT and remain recoverable from one valid JPEG.
 
 Local tests cover transfer, repeat transfer, conflicting existing content,
 missing source objects, and indoor exclusion.

@@ -1,9 +1,14 @@
 {
-  "benchmark": {"enabled": true, "run_id": "REQUIRED_RUN_ID"},
+  "benchmark": {
+    "enabled": true,
+    "run_id": "REQUIRED_RUN_ID",
+    "input_mode": "live",
+    "duration_seconds": 900
+  },
   "mqtt": {
     "host": "192.168.1.97",
     "port": 1883,
-    "topic": "weow/benchmark/N0V0",
+    "topic": "webcam/T0",
     "protocol": "5",
     "qos": 1,
     "client_id": "weow-benchmark-REQUIRED_RUN_ID",
@@ -13,8 +18,8 @@
   },
   "spool_s3": {
     "endpoint_url": "REQUIRED",
-    "bucket": "iot-pilot-weow-storage",
-    "credentials_prefix": "weows"
+    "bucket": "webcam-ingestion-buffer",
+    "credentials_prefix": "ingestion"
   },
   "archive_s3": {
     "endpoint_url": "REQUIRED",
@@ -37,6 +42,7 @@
   "acquisition": {
     "workers": 4,
     "max_pending_notifications": 1000,
+    "minimum_nfs_free_bytes": 21474836480,
     "operation_timeout_seconds": 5,
     "retry_count": 1,
     "retry_admissible_age_seconds": 10,
@@ -49,7 +55,9 @@
       "transition_margin_seconds": 3600,
       "default_timestamp_field": "download_timestamp",
       "timestamp_field_by_network": {
-        "benchmark": "download_timestamp"
+        "win": "download_timestamp",
+        "ska": "download_timestamp",
+        "fin": "download_timestamp"
       }
     }
   }

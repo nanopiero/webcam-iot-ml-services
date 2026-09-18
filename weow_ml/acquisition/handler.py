@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import shutil
 
 from .archive import archive_image, fetch_image
 from .contracts import parse_notification
@@ -29,7 +30,8 @@ class NotificationHandler:
     def __init__(self, registry, spool, archive, archive_bucket, nfs_root,
                  state_publisher, kafka_publisher, timestamp_fields,
                  default_timestamp_field, transition_margin_seconds, clock=None,
-                 metrics=None, output_prefix="", notification_guard=None):
+                 metrics=None, output_prefix="", notification_guard=None,
+                 minimum_nfs_free_bytes=0):
         self.registry = registry
         self.spool = spool
         self.archive = archive
@@ -44,6 +46,7 @@ class NotificationHandler:
         self.metrics = metrics
         self.output_prefix = output_prefix
         self.notification_guard = notification_guard
+        self.minimum_nfs_free_bytes = minimum_nfs_free_bytes
 
     def _stage(self, name):
         if self.metrics is None:
@@ -89,6 +92,10 @@ class NotificationHandler:
             }, key_prefix=self.output_prefix)
         if not decision.publish_jobs:
             return HandlingResult(notification.image_id, decision.reason, True, 0, len(image))
+
+        if (self.minimum_nfs_free_bytes
+                and shutil.disk_usage(self.nfs_root).free < self.minimum_nfs_free_bytes):
+            raise OSError("NFS free space is below the configured stop threshold")
 
         with self._stage("image_preparation"):
             prepared = prepare_processing_images(

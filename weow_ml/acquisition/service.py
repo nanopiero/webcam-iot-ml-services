@@ -30,12 +30,20 @@ LOG = logging.getLogger("weow.acquisition")
 class MQTTService:
     """Subscribe and couple MQTT acknowledgement to completed handling."""
 
-    def __init__(self, settings, workers, client=None, metrics=None):
+    def __init__(self, settings, workers, client=None, metrics=None,
+                 run_duration_seconds=None):
         if str(settings.get("protocol")) != "5" or settings.get("qos") not in (1, 2):
             raise ValueError("operational Acquisition requires MQTT v5 with QoS 1 or 2")
         self.settings = dict(settings)
         self.workers = workers
         self.metrics = metrics
+        if (run_duration_seconds is not None
+                and (isinstance(run_duration_seconds, bool)
+                     or not isinstance(run_duration_seconds, (int, float))
+                     or run_duration_seconds <= 0)):
+            raise ValueError("run duration must be a positive number of seconds")
+        self.run_duration_seconds = run_duration_seconds
+        self._duration_elapsed = threading.Event()
         self.client = client or mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=settings["client_id"],
@@ -143,10 +151,23 @@ class MQTTService:
         self.client.connect(
             self.settings["host"], self.settings["port"], keepalive=30, clean_start=True
         )
-        result = self.client.loop_forever(retry_first_connection=False)
+        timer = None
+        if self.run_duration_seconds is not None:
+            def stop_after_duration():
+                self._duration_elapsed.set()
+                self.client.disconnect()
+
+            timer = threading.Timer(self.run_duration_seconds, stop_after_duration)
+            timer.daemon = True
+            timer.start()
+        try:
+            result = self.client.loop_forever(retry_first_connection=False)
+        finally:
+            if timer is not None:
+                timer.cancel()
         if self._fatal is not None:
             raise RuntimeError("Acquisition stopped after a handling failure") from self._fatal
-        if result != mqtt.MQTT_ERR_SUCCESS:
+        if result != mqtt.MQTT_ERR_SUCCESS and not self._duration_elapsed.is_set():
             raise ConnectionError("MQTT network loop failed: " + mqtt.error_string(result))
 
     def close(self):
@@ -190,6 +211,7 @@ def build_service(settings, secrets_dir, metrics=None):
         solar["transition_margin_seconds"],
         metrics=metrics, output_prefix=output_prefix,
         notification_guard=notification_guard,
+        minimum_nfs_free_bytes=acquisition.get("minimum_nfs_free_bytes", 0),
     )
     workers = AcquisitionWorkers(
         handler, acquisition["workers"], acquisition["max_pending_notifications"],
@@ -197,7 +219,10 @@ def build_service(settings, secrets_dir, metrics=None):
         acquisition["retry_delay_seconds"],
         metrics=metrics,
     )
-    return MQTTService(settings["mqtt"], workers, metrics=metrics), workers, publisher
+    duration = settings.get("benchmark", {}).get("duration_seconds")
+    return MQTTService(
+        settings["mqtt"], workers, metrics=metrics, run_duration_seconds=duration
+    ), workers, publisher
 
 
 def preflight(settings, secrets_dir):
@@ -265,13 +290,21 @@ def main():
     except KeyboardInterrupt:
         LOG.info("Acquisition interrupted")
     except Exception as exc:
-        LOG.error("Acquisition failed: %s", type(exc).__name__)
+        chain = []
+        current = exc
+        while current is not None:
+            chain.append(f"{type(current).__name__}: {current}")
+            current = current.__cause__
+        LOG.error("Acquisition failed: %s", " <- ".join(chain))
         return 2
     finally:
         if service is not None:
             service.close()
         if workers is not None:
             workers.close(wait=True)
+        if service is not None:
+            LOG.info("Acquisition counters: %s",
+                     json.dumps(service.counters, sort_keys=True))
         if publisher is not None:
             publisher.close()
     return 0

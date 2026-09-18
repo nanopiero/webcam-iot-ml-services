@@ -9,6 +9,7 @@ from botocore.exceptions import ClientError
 from PIL import Image
 
 from weow_ml.acquisition.handler import NotificationHandler
+from weow_ml.acquisition.archive import unbundle_image_sidecar
 from weow_ml.acquisition.registry import Resolution, Stream
 
 
@@ -31,14 +32,14 @@ class MemoryS3:
             )
         return {"Body": io.BytesIO(content)}
 
-    def put_object(self, Bucket, Key, Body, ContentType, IfNoneMatch):
+    def put_object(self, Bucket, Key, Body, ContentType, IfNoneMatch, Metadata=None):
         identity = (Bucket, Key)
         if identity in self.objects:
             raise ClientError(
                 {"Error": {"Code": "PreconditionFailed"},
                  "ResponseMetadata": {"HTTPStatusCode": 412}}, "PutObject"
             )
-        self.objects[identity] = Body
+        self.objects[identity] = (Body, Metadata or {}) if Metadata else Body
 
 
 class Registry:
@@ -87,7 +88,8 @@ class HandlerTests(unittest.TestCase):
         self.stream = Stream("fin12345P01T0_P0S0V0", 0, 0, 512, True, True, 7)
         self.now = datetime(2026, 4, 15, 10, 25, 4, tzinfo=timezone.utc)
 
-    def handler(self, root, status="whitelist", streams=None, output_prefix=""):
+    def handler(self, root, status="whitelist", streams=None, output_prefix="",
+                minimum_nfs_free_bytes=0):
         streams = (self.stream,) if streams is None else streams
         prefix = output_prefix + "/" if output_prefix else ""
         path = prefix + "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0_P0S0V0.jpg"
@@ -99,6 +101,7 @@ class HandlerTests(unittest.TestCase):
             state, publisher, {"fin": "download_timestamp"},
             "download_timestamp", 3600, clock=lambda: self.now,
             output_prefix=output_prefix,
+            minimum_nfs_free_bytes=minimum_nfs_free_bytes,
         )
         return handler, state, publisher
 
@@ -120,8 +123,12 @@ class HandlerTests(unittest.TestCase):
             self.assertFalse(any(Path(root).rglob("*.jpg")))
         self.assertEqual((result.status, result.archived, result.published_jobs),
                          ("greylisted", True, 0))
-        sidecar_key = "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0.json"
-        sidecar = json.loads(self.archive.objects["archive", sidecar_key])
+        archive_key = "images/fin12345P01T0/2026/04/15/10/20260415T102500Z_fin12345P01T0.jpg"
+        bundle = self.archive.objects["archive", archive_key]
+        image, sidecar = unbundle_image_sidecar(bundle)
+        self.assertEqual(image, self.image)
+        with Image.open(io.BytesIO(bundle)) as archived:
+            archived.verify()
         self.assertEqual(sidecar["acquisition"]["processing_stream_ids"],
                          [self.stream.processing_stream_id])
         self.assertEqual(sidecar["acquisition"]["solar"]["phase"], 1)
@@ -138,6 +145,17 @@ class HandlerTests(unittest.TestCase):
                          ("published", True, 1))
         self.assertEqual(state.streams, [self.stream.processing_stream_id])
         self.assertEqual(publisher.jobs[0].kafka_partition, 7)
+
+    def test_nfs_capacity_threshold_stops_before_nfs_and_kafka(self):
+        with tempfile.TemporaryDirectory() as root:
+            handler, state, publisher = self.handler(
+                root, minimum_nfs_free_bytes=2**63
+            )
+            with self.assertRaisesRegex(OSError, "NFS free space"):
+                handler.handle(self.payload)
+            self.assertFalse(any(Path(root).rglob("*.jpg")))
+        self.assertFalse(state.streams)
+        self.assertFalse(publisher.jobs)
 
     def test_output_prefix_is_shared_by_archive_nfs_and_job(self):
         with tempfile.TemporaryDirectory() as root:

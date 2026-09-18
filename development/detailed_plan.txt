@@ -127,6 +127,14 @@ Acceptance:
 - No storage exhaustion occurs within the planned acquisition-only interval.
 Deliverables: workload fixtures/driver, run recipes, metrics, and benchmark report.
 
+Accepted validation choice (2026-09-18): use the real `webcam/T0` feed and
+real ingestion-spool objects rather than synthetic replay for the closing
+capacity result. The accepted 15-minute, 24-worker run kept a zero worker queue
+through observed bursts above 40 images/second. Defer longer traffic-variation
+coverage to a one-week endurance run. That run requires active consumers or
+additional NFS capacity because the present NFS holds about three nominal days
+of processing images. See `benchmarks/results/wp15_live_002.md`.
+
 WP1.6 — Controlled launch and Phase 2 handover
 Dependencies: WP1.1–WP1.5 complete.
 Tasks:

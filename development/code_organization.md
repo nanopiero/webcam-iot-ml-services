@@ -61,7 +61,7 @@ The operational notification path is:
 ```text
 validate notification
   -> resolve and persist stream identities
-  -> download and archive the complete image and sidecar
+  -> download and archive the complete image and embedded sidecar in one PUT
   -> publish processing images and initial state atomically on NFS
   -> publish and acknowledge one Kafka job per eligible processing stream
 ```

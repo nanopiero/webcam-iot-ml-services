@@ -65,6 +65,21 @@ class BenchmarkGuardTests(unittest.TestCase):
         with self.assertRaises(ContractError):
             BenchmarkGuard("run_001", "REQUIRED_BENCHMARK_SPOOL_BUCKET")(notification)
 
+    def test_live_input_accepts_real_spool_notifications_and_keeps_outputs_isolated(self):
+        settings = self.settings()
+        settings["benchmark"]["input_mode"] = "live"
+        settings["mqtt"]["topic"] = "webcam/T0"
+        notification = parse_notification(json.loads(FIXTURE.read_text()))
+        settings["spool_s3"]["bucket"] = notification.bucket
+        guard = validate_benchmark_settings(settings, {"dbname": "weow_ml_benchmark"})
+        guard(notification)
+        self.assertEqual(guard.output_prefix, "benchmarks/wp1_5/run_001")
+
+    def test_live_input_rejects_a_notification_outside_the_real_spool(self):
+        notification = parse_notification(json.loads(FIXTURE.read_text()))
+        with self.assertRaises(ContractError):
+            BenchmarkGuard("run_001", "another-bucket", "live")(notification)
+
 
 if __name__ == "__main__":
     unittest.main()

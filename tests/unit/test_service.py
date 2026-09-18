@@ -2,6 +2,7 @@ from concurrent.futures import Future
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import threading
 import unittest
 
 import paho.mqtt.client as mqtt
@@ -30,6 +31,24 @@ class Client:
     def subscribe(self, topic, qos):
         self.subscriptions.append((topic, qos))
         return mqtt.MQTT_ERR_SUCCESS, 1
+
+
+class TimedClient(Client):
+    def __init__(self):
+        super().__init__()
+        self.stopped = threading.Event()
+
+    def connect(self, host, port, keepalive, clean_start):
+        return mqtt.MQTT_ERR_SUCCESS
+
+    def disconnect(self):
+        super().disconnect()
+        self.stopped.set()
+        return mqtt.MQTT_ERR_SUCCESS
+
+    def loop_forever(self, retry_first_connection):
+        self.stopped.wait(1)
+        return mqtt.MQTT_ERR_NO_CONN
 
 
 class Workers:
@@ -89,6 +108,14 @@ class MQTTServiceTests(unittest.TestCase):
         self.assertEqual(client.acks, [(17, 1), (18, 1)])
         self.assertEqual(service.counters["invalid"], 1)
         self.assertEqual(service.counters["retained"], 1)
+
+    def test_configured_duration_is_a_clean_disconnect(self):
+        client = TimedClient()
+        service = MQTTService(
+            self.settings, Workers(), client=client, run_duration_seconds=0.01
+        )
+        service.run()
+        self.assertTrue(service._duration_elapsed.is_set())
 
 
 if __name__ == "__main__":
