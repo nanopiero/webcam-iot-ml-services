@@ -4,12 +4,13 @@ import argparse
 import copy
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 import random
 import re
 
-from ..acquisition.contracts import parse_notification
+from ..acquisition.contracts import identifier, parse_notification
 from .images import load_profiles
 
 
@@ -56,7 +57,8 @@ class Workload:
                  spool_bucket="REQUIRED_BENCHMARK_SPOOL_BUCKET"):
         self.fixture = copy.deepcopy(fixture)
         self.scenario = scenario
-        self.run_id = run_id
+        self.run_id = identifier(run_id, "benchmark.run_id")
+        self.identity_token = hashlib.sha256(self.run_id.encode("ascii")).hexdigest()[:8]
         self.start = start.astimezone(timezone.utc)
         self.seed = seed
         self.profiles = tuple(profiles)
@@ -103,7 +105,7 @@ class Workload:
         panoramic = stream_number in self.panorama_streams
         choices = self.panoramic_profiles if panoramic else self.standard_profiles
         profile = choices[stream_number % len(choices)]
-        stem = f"bm{stream_number:08d}"
+        stem = f"bm{self.identity_token}{stream_number:08d}"
         stream_id = stem + "T0"
         image_id = timestamp.strftime("%Y%m%dT%H%M%SZ_") + stream_id + ".jpg"
         payload["image_id"] = image_id
@@ -139,6 +141,7 @@ class Workload:
         payload["benchmark"] = {
             "run_id": self.run_id,
             "seed": self.seed,
+            "stream_identity_prefix": "bm" + self.identity_token,
             "scenario": self.scenario.name,
             "phase": phase,
             "metadata_changed": changed,

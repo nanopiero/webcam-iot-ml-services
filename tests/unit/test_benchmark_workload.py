@@ -25,6 +25,19 @@ class BenchmarkWorkloadTests(unittest.TestCase):
         self.assertEqual(SCENARIOS["burst"].measured_events, 10000)
         self.assertEqual(SCENARIOS["margin"].measured_events, 12000)
 
+    def test_each_run_has_distinct_stream_identities(self):
+        first = next(self.workload().events())
+        second_workload = Workload(
+            json.loads(FIXTURE.read_text()), SCENARIOS["smoke"], "run_002",
+            datetime(2026, 4, 15, 10, tzinfo=timezone.utc),
+            load_profiles(json.loads(PROFILES.read_text())), seed=7,
+        )
+        second = next(second_workload.events())
+        self.assertNotEqual(
+            first["derived_stream"]["derived_stream_id"],
+            second["derived_stream"]["derived_stream_id"],
+        )
+
     def test_events_are_valid_and_isolated(self):
         workload = self.workload()
         events = list(workload.events())
