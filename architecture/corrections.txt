@@ -1,1 +1,20 @@
+2026-09-18 — Store each archived image and sidecar in one S3 object
 
+Acquisition no longer writes one `.jpg` object followed by a separate `.json`
+sidecar object. It performs one conditional S3 PUT to the image's existing
+`.jpg` archive key. The object remains a valid JPEG, and contains the compressed
+JSON sidecar in one or more JPEG APP15 application segments inserted after the
+JPEG start marker.
+
+The sidecar contains the complete upstream notification, the resolved
+processing-stream identifiers, acquisition and solar information, and the
+SHA-256 digest of the original source JPEG. APP15 payloads are sequenced, so a
+sidecar larger than one JPEG segment can be split without truncation. Standard
+JPEG readers ignore these application segments. WEOW readers can remove them to
+recover both the exact original JPEG byte stream and the complete JSON sidecar.
+
+The single acknowledged conditional PUT makes the image and its sidecar
+indivisible: there can no longer be a stored image whose separate sidecar write
+failed. If the archive key already exists, Acquisition reads the existing
+bundle and checks the recovered source image, notification, and image digest
+instead of overwriting it. No separate `.json` archive key is created.
