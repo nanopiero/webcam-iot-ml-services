@@ -46,18 +46,23 @@ def read_object(client, bucket, key, limit=10 * 1024 * 1024):
         body.close()
 
 
-def put_verified(client, bucket, key, data, content_type):
+def put_if_absent(client, bucket, key, data, content_type):
+    """Return True after an acknowledged create, False when the key exists."""
     try:
         client.put_object(Bucket=bucket, Key=key, Body=data, ContentType=content_type,
                           IfNoneMatch="*")
     except ClientError as exc:
         if exc.response["ResponseMetadata"]["HTTPStatusCode"] != 412:
             raise
-        # Do not overwrite an existing object; check that the image is identical.
+        return False
+    return True
+
+
+def put_verified(client, bucket, key, data, content_type):
+    """Create once, or verify that an existing immutable object is identical."""
+    if not put_if_absent(client, bucket, key, data, content_type):
         if read_object(client, bucket, key) != data:
-            raise ValueError("Archive object already exists with different content") from exc
-    if read_object(client, bucket, key) != data:
-        raise ValueError("Archive read-back verification failed")
+            raise ValueError("Archive object already exists with different content")
 
 
 def fetch_image(source, notification):
@@ -80,13 +85,10 @@ def archive_image(destination, bucket, notification, image, acquisition, key_pre
     }
     sidecar_data = json.dumps(sidecar, ensure_ascii=False, allow_nan=False,
                               sort_keys=True, indent=2).encode("utf-8")
-    try:
+    if not put_if_absent(
+        destination, bucket, sidecar_key, sidecar_data, "application/json"
+    ):
         existing = read_object(destination, bucket, sidecar_key)
-    except ClientError as exc:
-        if exc.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
-            raise
-        put_verified(destination, bucket, sidecar_key, sidecar_data, "application/json")
-    else:
         stored = json.loads(existing)
         if (stored.get("notification") != notification.payload
                 or stored.get("acquisition", {}).get("image_sha256") != digest):

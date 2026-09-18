@@ -16,8 +16,10 @@ class MemoryS3:
     def __init__(self):
         self.objects = {}
         self.writes = 0
+        self.reads = 0
 
     def get_object(self, Bucket, Key):
+        self.reads += 1
         if (Bucket, Key) not in self.objects:
             raise ClientError({"Error": {"Code": "NoSuchKey"},
                                "ResponseMetadata": {"HTTPStatusCode": 404}}, "GetObject")
@@ -43,11 +45,13 @@ class ArchiveTests(unittest.TestCase):
 
     def test_transfer_and_retry_preserve_sidecar(self):
         first = archive_notification(self.source, self.destination, "archive", self.payload)
+        self.assertEqual(self.destination.reads, 0)
         before = dict(self.destination.objects)
         second = archive_notification(self.source, self.destination, "archive", self.payload)
         self.assertEqual(first, second)
         self.assertEqual(before, self.destination.objects)
         self.assertEqual(self.destination.writes, 2)
+        self.assertEqual(self.destination.reads, 2)
         sidecar = json.loads(before["archive", first["sidecar_key"]])
         self.assertEqual(sidecar["notification"], self.payload)
         self.assertIsNone(sidecar["acquisition"]["processing_stream_ids"])

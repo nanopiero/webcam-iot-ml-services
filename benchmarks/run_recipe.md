@@ -23,10 +23,10 @@ python -m weow_ml.benchmark.spool \
   --scenario smoke --start "$start" --receipt "$receipt"
 ```
 
-The spool command performs conditional writes and read-back verification. It
-can be rerun with the same arguments; it rejects existing objects whose bytes
-differ. Start the benchmark Acquisition service only after this command has
-completed and its Prometheus target is up.
+The spool command performs acknowledged conditional writes. It can be rerun
+with the same arguments; existing objects are then read and rejected if their
+bytes differ. Start the benchmark Acquisition service only after this command
+has completed and its Prometheus target is up.
 
 Capture baseline host, NFS, Kafka, PostgreSQL, and S3 metrics, then publish:
 
